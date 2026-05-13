@@ -1,0 +1,15 @@
+# Python
+backend/venv/
+backend/__pycache__/
+backend/*.pyc
+
+# Datos generados en runtime
+backend/chunk_cache.json
+backend/chunk_cache.tmp
+backend/map_*.png
+
+# Secrets y configuración local
+backend/.env
+
+# Logs
+*.log

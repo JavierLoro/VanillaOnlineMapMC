@@ -1,0 +1,30 @@
+# ─────────────────────────────────────────────────────────────
+#  docker-compose.yml  (alternativa a systemd)
+#  Ajusta WORLD_PATH al directorio que contiene region/
+#  Java 1.18+: <raiz_mundo>/dimensions/minecraft/overworld
+# ─────────────────────────────────────────────────────────────
+
+services:
+  mc-chunk-map:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: mc-chunk-map
+    restart: unless-stopped
+    ports:
+      - "8200:8200"
+    volumes:
+      - /opt/minecraft/world:/data/world:ro
+      - ./frontend:/app/frontend:ro
+      - ./backend/chunk_cache.json:/app/chunk_cache.json
+    environment:
+      WORLD_PATH: /data/world/dimensions/minecraft/overworld
+      PORT: 8200
+      HOST: 0.0.0.0
+      CACHE_TTL: 120
+      LOG_LEVEL: info
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8200/api/stats"]
+      interval: 30s
+      timeout: 5s
+      retries: 3

@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Minecraft Chunk Map</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⛏</text></svg>">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #1a1a1a; --surface: #242424; --border: rgba(255,255,255,0.1);
+    --text: #e8e8e8; --muted: #8a8a8a; --accent: #4a9e6e; --accent2: #2d7a52;
+    --radius: 8px; --font: 'Segoe UI', system-ui, sans-serif;
+  }
+  html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--font); }
+  #app { display: flex; height: 100vh; overflow: hidden; }
+  #sidebar { width: 280px; min-width: 280px; background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
+  #map-container { flex: 1; position: relative; }
+  #map { width: 100%; height: 100%; background: #111; }
+  .sidebar-header { padding: 16px; border-bottom: 1px solid var(--border); }
+  .sidebar-header h1 { font-size: 15px; font-weight: 600; color: var(--accent); display: flex; align-items: center; gap: 8px; }
+  .sidebar-header p { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .section { padding: 12px 16px; border-bottom: 1px solid var(--border); }
+  .section-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin-bottom: 8px; }
+  input[type="text"] { width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); color: var(--text); font-size: 13px; padding: 6px 10px; outline: none; }
+  input[type="text"]:focus { border-color: var(--accent); }
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 7px 14px; border-radius: var(--radius); font-size: 13px; font-weight: 500; cursor: pointer; border: 1px solid var(--border); background: var(--bg); color: var(--text); transition: background 0.15s; width: 100%; margin-top: 6px; }
+  .btn:hover { background: rgba(255,255,255,0.07); }
+  .btn.primary { background: var(--accent2); border-color: var(--accent); color: #fff; }
+  .btn.warning { background: #3a2a10; border-color: #8a5a10; color: #e0a040; }
+  .btn.warning:hover { background: #4a3510; }
+  .btn.primary:hover { background: var(--accent); }
+  .layer-row { display: flex; align-items: center; gap: 8px; padding: 5px 0; cursor: pointer; }
+  .layer-row input[type="checkbox"] { accent-color: var(--accent); width: 14px; height: 14px; cursor: pointer; flex-shrink: 0; }
+  .layer-row label { font-size: 13px; cursor: pointer; flex: 1; }
+  .layer-row .layer-hint { font-size: 11px; color: var(--muted); }
+  #legend-list { flex: 1; overflow-y: auto; padding: 8px 16px; scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+  .legend-item { display: flex; align-items: center; gap: 8px; padding: 4px 0; cursor: pointer; border-radius: 4px; transition: opacity 0.15s; }
+  .legend-item:hover { opacity: 0.8; }
+  .legend-item.hidden { opacity: 0.3; }
+  .legend-swatch { width: 14px; height: 14px; border-radius: 3px; flex-shrink: 0; border: 1px solid rgba(255,255,255,0.15); }
+  .legend-name { font-size: 12px; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .hl-btn { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 13px; padding: 0 2px; line-height: 1; flex-shrink: 0; }
+  .hl-btn:hover { color: var(--accent); }
+  .hl-btn.active { color: var(--accent); }
+  #map-controls { position: absolute; top: 12px; right: 12px; display: flex; flex-direction: column; gap: 6px; z-index: 1000; }
+  .map-btn { background: var(--surface); border: 1px solid var(--border); color: var(--text); border-radius: var(--radius); padding: 6px 12px; font-size: 12px; cursor: pointer; backdrop-filter: blur(4px); transition: background 0.15s; }
+  .map-btn:hover { background: rgba(255,255,255,0.12); }
+  #loading { position: absolute; inset: 0; background: rgba(0,0,0,0.7); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 2000; gap: 12px; }
+  #loading p { font-size: 14px; color: var(--muted); }
+  .spinner { width: 32px; height: 32px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .tile-tooltip { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 6px 10px; font-size: 12px; color: var(--text); min-width: 180px; pointer-events: none; }
+  .tile-tooltip strong { color: var(--accent); }
+  #floating-tooltip { position: fixed; z-index: 9999; display: none; }
+  #status { padding: 6px 16px; font-size: 11px; color: var(--muted); border-top: 1px solid var(--border); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .leaflet-image-layer { image-rendering: pixelated; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="sidebar">
+    <div class="sidebar-header">
+      <h1>&#9947; Minecraft Chunk Map</h1>
+      <p id="world-path">Cargando mundo...</p>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Filtrar bioma</div>
+      <input type="text" id="biome-search" placeholder="Buscar bioma..." oninput="filterLegend(this.value)">
+      <button class="btn" onclick="toggleAllBiomes(true)">Mostrar todos</button>
+      <button class="btn" onclick="toggleAllBiomes(false)">Ocultar todos</button>
+      <button class="btn primary" onclick="refreshData()">&#8635; Actualizar mapa</button>
+      <button class="btn warning" id="btn-reset-world" onclick="checkNewWorld()">&#9762; Nuevo mundo</button>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Capas de relieve</div>
+      <div class="layer-row">
+        <input type="checkbox" id="layer-topo" onchange="onLayerChange()">
+        <label for="layer-topo">Topograf&iacute;a</label>
+        <span class="layer-hint">altura</span>
+      </div>
+      <div class="layer-row">
+        <input type="checkbox" id="layer-hillshade" onchange="onLayerChange()">
+        <label for="layer-hillshade">Hillshading</label>
+        <span class="layer-hint">pendiente</span>
+      </div>
+    </div>
+
+    <div class="section-title" style="padding:10px 16px 4px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted)">Leyenda de biomas</div>
+    <div id="legend-list"></div>
+    <div id="status">Iniciando...</div>
+  </div>
+
+  <div id="map-container">
+    <div id="map"></div>
+    <div id="floating-tooltip"><div class="tile-tooltip" id="tooltip-inner"></div></div>
+    <div id="map-controls">
+      <button class="map-btn" onclick="resetView()">&#8962; Centrar</button>
+      <button class="map-btn" onclick="goToSpawn()">&#9733; Spawn</button>
+    </div>
+    <div id="loading">
+      <div class="spinner"></div>
+      <p id="loading-msg">Cargando tiles del mundo...</p>
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const API = "";
+
+let allTiles = [];
+let tileMap  = new Map();   // "bx4,bz4" → tile
+let boundsInfo = null;      // {minBx4, minBz4, maxBx4, maxBz4, w, h}
+let spawnMarker = null;
+let biomeVisibility = {};
+let lastStats = null;
+let imageOverlay = null;
+let highlightedBiome = null;
+
+const layers = { topo: false, hillshade: false };
+
+const map = L.map("map", {
+  crs: L.CRS.Simple,
+  minZoom: -6,
+  maxZoom: 8,
+  zoomControl: false,
+});
+
+const floatingTooltip = document.getElementById("floating-tooltip");
+const tooltipInner    = document.getElementById("tooltip-inner");
+
+function mc2ll(bx4, bz4) { return L.latLng(-bz4, bx4); }
+
+function hexToRgb(hex) {
+  return [
+    parseInt(hex.slice(1, 3), 16),
+    parseInt(hex.slice(3, 5), 16),
+    parseInt(hex.slice(5, 7), 16),
+  ];
+}
+
+function applyFactor(hex, f) {
+  const [r, g, b] = hexToRgb(hex);
+  return "rgb(" + Math.round(r*f) + "," + Math.round(g*f) + "," + Math.round(b*f) + ")";
+}
+
+function computeTileColor(tile) {
+  let f = 1.0;
+  if (layers.topo)      f *= tile.shade     ?? 1.0;
+  if (layers.hillshade) f *= tile.hillshade ?? 1.0;
+  return f === 1.0 ? tile.color : applyFactor(tile.color, f);
+}
+
+// ── Canvas rendering ──────────────────────────────────────────────────────────
+
+function buildTileMap() {
+  tileMap.clear();
+  for (const t of allTiles) tileMap.set(t.bx4 + "," + t.bz4, t);
+}
+
+function computeBoundsInfo() {
+  if (!allTiles.length) return null;
+  let minBx4 = Infinity, maxBx4 = -Infinity;
+  let minBz4 = Infinity, maxBz4 = -Infinity;
+  for (const t of allTiles) {
+    if (t.bx4 < minBx4) minBx4 = t.bx4;
+    if (t.bx4 > maxBx4) maxBx4 = t.bx4;
+    if (t.bz4 < minBz4) minBz4 = t.bz4;
+    if (t.bz4 > maxBz4) maxBz4 = t.bz4;
+  }
+  return { minBx4, maxBx4, minBz4, maxBz4, w: maxBx4-minBx4+1, h: maxBz4-minBz4+1 };
+}
+
+function overlayBounds() {
+  const {minBx4, maxBx4, minBz4, maxBz4} = boundsInfo;
+  return [[ -(maxBz4+1), minBx4 ], [ -minBz4, maxBx4+1 ]];
+}
+
+function drawMainCanvas() {
+  if (!boundsInfo) return;
+  const {minBx4, minBz4, w, h} = boundsInfo;
+
+  const canvas = document.createElement("canvas");
+  canvas.width = w; canvas.height = h;
+  const ctx = canvas.getContext("2d");
+  const img = ctx.createImageData(w, h);
+  const d   = img.data;
+
+  const hl = highlightedBiome;
+  for (const t of allTiles) {
+    if (biomeVisibility[t.biome] === false) continue;
+    const [r, g, b] = hexToRgb(t.color);
+    let f = 1.0;
+    if (layers.topo)      f *= t.shade     ?? 1.0;
+    if (layers.hillshade) f *= t.hillshade ?? 1.0;
+    const isHighlighted = hl !== null && t.biome === hl;
+    const isDimmed      = hl !== null && t.biome !== hl;
+    const colorF = isDimmed ? f * 0.25 : f;
+    const alpha  = isHighlighted ? 255 : isDimmed ? 55 : 217;
+    const i = ((t.bz4 - minBz4) * w + (t.bx4 - minBx4)) * 4;
+    d[i]   = Math.min(255, Math.round(r * colorF));
+    d[i+1] = Math.min(255, Math.round(g * colorF));
+    d[i+2] = Math.min(255, Math.round(b * colorF));
+    d[i+3] = alpha;
+  }
+
+  ctx.putImageData(img, 0, 0);
+  const url    = canvas.toDataURL("image/png");
+  const bounds = overlayBounds();
+
+  if (imageOverlay) {
+    imageOverlay.setUrl(url);
+  } else {
+    imageOverlay = L.imageOverlay(url, bounds, { opacity: 1, interactive: false })
+      .addTo(map);
+  }
+}
+
+function renderTiles() {
+  buildTileMap();
+  boundsInfo = computeBoundsInfo();
+  if (imageOverlay) { imageOverlay.remove(); imageOverlay = null; }
+  drawMainCanvas();
+}
+
+function rerenderTiles() {
+  drawMainCanvas();
+}
+
+// ── Tooltip via mousemove ────────────────────────────────────────────────────
+
+map.on("mousemove", function(e) {
+  const bx4 = Math.floor(e.latlng.lng);
+  const bz4 = Math.floor(-e.latlng.lat);
+  const t   = tileMap.get(bx4 + "," + bz4);
+  if (t) {
+    tooltipInner.innerHTML = buildTooltip(t);
+    const x = e.originalEvent.clientX, y = e.originalEvent.clientY;
+    floatingTooltip.style.left    = (x + 16) + "px";
+    floatingTooltip.style.top     = y + "px";
+    floatingTooltip.style.display = "block";
+  } else {
+    floatingTooltip.style.display = "none";
+  }
+});
+map.on("mouseout", function() { floatingTooltip.style.display = "none"; });
+
+// ── Layer / biome controls ───────────────────────────────────────────────────
+
+function onLayerChange() {
+  layers.topo      = document.getElementById("layer-topo").checked;
+  layers.hillshade = document.getElementById("layer-hillshade").checked;
+  rerenderTiles();
+}
+
+function toggleBiome(biome, item) {
+  biomeVisibility[biome] = !biomeVisibility[biome];
+  item.classList.toggle("hidden", !biomeVisibility[biome]);
+  rerenderTiles();
+}
+
+function setHighlight(biome) {
+  highlightedBiome = highlightedBiome === biome ? null : biome;
+  document.querySelectorAll(".hl-btn").forEach(function(btn) {
+    btn.classList.toggle("active", btn.dataset.biome === highlightedBiome);
+  });
+  rerenderTiles();
+}
+
+function toggleAllBiomes(visible) {
+  highlightedBiome = null;
+  document.querySelectorAll(".hl-btn").forEach(function(btn) { btn.classList.remove("active"); });
+  Object.keys(biomeVisibility).forEach(function(b) { biomeVisibility[b] = visible; });
+  document.querySelectorAll(".legend-item").forEach(function(i) { i.classList.toggle("hidden", !visible); });
+  rerenderTiles();
+}
+
+// ── Tooltip content ──────────────────────────────────────────────────────────
+
+
+function buildTooltip(t) {
+  const name = t.biome.replace("minecraft:", "").replace(/_/g, " ");
+  const bx   = t.bx4 * 4, bz = t.bz4 * 4;
+  const cx   = Math.floor(t.bx4 / 4), cz = Math.floor(t.bz4 / 4);
+  const yStr = t.ws != null ? "<br>Altura: " + Math.round(t.ws) + " Y" : "";
+  return "<strong>" + name + "</strong>" +
+         "<br>Bloque: (" + bx + ", " + bz + ")<br>Chunk: (" + cx + ", " + cz + ")" + yStr;
+}
+
+// ── Legend ───────────────────────────────────────────────────────────────────
+
+function buildLegend(distribution) {
+  const list = document.getElementById("legend-list");
+  list.innerHTML = "";
+  Object.keys(distribution).forEach(function(b) {
+    if (biomeVisibility[b] === undefined) biomeVisibility[b] = true;
+  });
+  Object.entries(distribution).forEach(function(entry) {
+    const biome = entry[0], count = entry[1];
+    const t     = allTiles.find(function(c) { return c.biome === biome; });
+    const color = t ? t.color : "#888";
+    const name  = biome.replace("minecraft:", "").replace(/_/g, " ");
+    const item  = document.createElement("div");
+    item.className = "legend-item" + (biomeVisibility[biome] !== false ? "" : " hidden");
+    item.dataset.biome = biome;
+    item.innerHTML =
+      '<div class="legend-swatch" style="background:' + color + '"></div>' +
+      '<span class="legend-name" title="' + biome + '">' + name + "</span>" +
+      '<button class="hl-btn" data-biome="' + biome + '" title="Resaltar en mapa">&#9678;</button>';
+    item.onclick = function() { toggleBiome(biome, item); };
+    item.querySelector(".hl-btn").onclick = function(e) {
+      e.stopPropagation();
+      setHighlight(biome);
+    };
+    list.appendChild(item);
+  });
+}
+
+function filterLegend(query) {
+  const q = query.toLowerCase();
+  document.querySelectorAll(".legend-item").forEach(function(item) {
+    const n = item.dataset.biome.replace("minecraft:", "").replace(/_/g, " ");
+    item.style.display = n.includes(q) ? "" : "none";
+  });
+}
+
+// ── Spawn ────────────────────────────────────────────────────────────────────
+
+function renderSpawn(spawn) {
+  if (spawnMarker) { map.removeLayer(spawnMarker); spawnMarker = null; }
+  spawnMarker = L.circleMarker(mc2ll(spawn.bx4, spawn.bz4), {
+    radius: 7, color: "#fff", weight: 2,
+    fillColor: "#e74c3c", fillOpacity: 1, zIndexOffset: 1000,
+  }).addTo(map);
+  spawnMarker.bindTooltip(
+    '<div class="tile-tooltip"><strong>&#9733; Spawn</strong><br>Bloque: (' + spawn.x + ", " + spawn.z + ")<br>Y: " + spawn.y + "</div>",
+    { className: "tile-tooltip", sticky: true, offset: [12, 0] }
+  );
+}
+
+function goToSpawn() {
+  if (spawnMarker) { map.setView(spawnMarker.getLatLng(), 4); spawnMarker.openTooltip(); }
+}
+
+// ── View ─────────────────────────────────────────────────────────────────────
+
+function resetView() {
+  if (!boundsInfo) return;
+  const {minBx4, maxBx4, minBz4, maxBz4} = boundsInfo;
+  map.fitBounds([mc2ll(minBx4, minBz4+1), mc2ll(maxBx4+1, minBz4)], { padding: [20, 20] });
+}
+
+// ── Data loading ─────────────────────────────────────────────────────────────
+
+async function loadChunks() {
+  document.getElementById("loading").style.display = "flex";
+  setStatus("Consultando API...");
+  try {
+    document.getElementById("loading-msg").textContent = "Descargando datos del mundo...";
+    const [tilesRes, statsRes, spawnRes] = await Promise.all([
+      fetch(API + "/api/chunks"),
+      fetch(API + "/api/stats"),
+      fetch(API + "/api/spawn"),
+    ]);
+    if (!tilesRes.ok) throw new Error("HTTP " + tilesRes.status);
+
+    document.getElementById("loading-msg").textContent = "Procesando tiles...";
+    const tilesData = await tilesRes.json();
+    lastStats = await statsRes.json();
+    allTiles  = tilesData.tiles;
+
+    document.getElementById("loading-msg").textContent = "Renderizando mapa...";
+    // Yield to browser to update the loading message before heavy work
+    await new Promise(function(r) { setTimeout(r, 0); });
+
+    renderTiles();
+    buildLegend(lastStats.biome_distribution);
+    resetView();
+    if (spawnRes.ok) renderSpawn(await spawnRes.json());
+
+    const chunks = (lastStats.total_full_chunks || 0).toLocaleString();
+    const hRange = lastStats.height_range ? " | Y " + lastStats.height_range.min + "–" + lastStats.height_range.max : "";
+    setStatus(allTiles.length.toLocaleString() + " tiles — " + chunks + " chunks" + hRange);
+    document.getElementById("world-path").textContent = lastStats.world_path || "—";
+  } catch (e) {
+    setStatus("Error: " + e.message);
+    console.error(e);
+  } finally {
+    document.getElementById("loading").style.display = "none";
+  }
+}
+
+function refreshData() {
+  fetch(API + "/api/refresh", { method: "POST" })
+    .then(function() { loadChunks(); })
+    .catch(function(e) { setStatus("Error al refrescar: " + e.message); });
+}
+
+function setStatus(msg) { document.getElementById("status").textContent = msg; }
+
+async function checkNewWorld() {
+  const btn = document.getElementById("btn-reset-world");
+  btn.disabled = true;
+  btn.textContent = "Comprobando...";
+  try {
+    const res  = await fetch(API + "/api/reset-world", { method: "POST" });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const data = await res.json();
+    if (data.reset) {
+      setStatus("Nuevo mundo detectado (seed " + data.new_seed + "). Recargando...");
+      await loadChunks();
+    } else {
+      setStatus("Mismo mundo — sin cambios (seed " + data.seed + ")");
+      setTimeout(function() {
+        if (lastStats) {
+          const chunks = (lastStats.total_full_chunks || 0).toLocaleString();
+          setStatus(allTiles.length.toLocaleString() + " tiles — " + chunks + " chunks");
+        }
+      }, 3000);
+    }
+  } catch (e) {
+    setStatus("Error al comprobar mundo: " + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "☢ Nuevo mundo";
+  }
+}
+
+loadChunks();
+</script>
+</body>
+</html>

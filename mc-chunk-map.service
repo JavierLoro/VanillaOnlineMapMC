@@ -1,0 +1,15 @@
+[Unit]
+Description=Minecraft Chunk Map Service
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/mapProject/mc-chunk-map/backend
+EnvironmentFile=/opt/mapProject/mc-chunk-map/backend/.env
+ExecStart=/opt/mapProject/mc-chunk-map/backend/venv/bin/uvicorn main:app --host ${HOST} --port ${PORT} --log-level ${LOG_LEVEL}
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
