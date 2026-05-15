@@ -89,6 +89,15 @@
       </div>
     </div>
 
+    <div class="section">
+      <div class="section-title">Estructuras</div>
+      <div class="layer-row">
+        <input type="checkbox" id="layer-blocks" onchange="onLayerChange()" checked>
+        <label for="layer-blocks">Bloques</label>
+        <span class="layer-hint">zona activa</span>
+      </div>
+    </div>
+
     <div class="section-title" style="padding:10px 16px 4px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted)">Leyenda de biomas</div>
     <div id="legend-list"></div>
     <div id="status">Iniciando...</div>
@@ -103,7 +112,7 @@
     </div>
     <div id="loading">
       <div class="spinner"></div>
-      <p id="loading-msg">Cargando tiles del mundo...</p>
+      <p id="loading-msg">Cargando mapa...</p>
     </div>
   </div>
 </div>
@@ -112,16 +121,24 @@
 <script>
 const API = "";
 
-let allTiles = [];
-let tileMap  = new Map();   // "bx4,bz4" → tile
-let boundsInfo = null;      // {minBx4, minBz4, maxBx4, maxBz4, w, h}
-let spawnMarker = null;
+let allTiles      = [];
+let tileMap       = new Map();
+let boundsInfo    = null;
+let spawnMarker   = null;
 let biomeVisibility = {};
-let lastStats = null;
-let imageOverlay = null;
+let lastStats     = null;
+let imageOverlay  = null;
 let highlightedBiome = null;
 
-const layers = { topo: false, hillshade: false };
+// PNG-based rendering state
+let pngLayers     = null;      // {base, shade, hillshade, isolines, blocks} — Image elements
+let tiRaw         = [];        // [[bx4, bz4, pi, ws], ...]
+let tiPalette     = [];        // [{name, color}, ...]
+let pngBounds     = null;      // {bx4_min, bx4_max, bz4_min, bz4_max}
+let biomePixels   = new Map(); // palette_idx → Int32Array of interleaved pixel (x, y) pairs
+let biomeColorMap = new Map(); // biome name → hex color
+
+const layers = { topo: false, hillshade: false, isolines: false, blocks: true };
 
 const map = L.map("map", {
   crs: L.CRS.Simple,
@@ -135,24 +152,32 @@ const tooltipInner    = document.getElementById("tooltip-inner");
 
 function mc2ll(bx4, bz4) { return L.latLng(-bz4, bx4); }
 
-function hexToRgb(hex) {
-  return [
-    parseInt(hex.slice(1, 3), 16),
-    parseInt(hex.slice(3, 5), 16),
-    parseInt(hex.slice(5, 7), 16),
-  ];
+// ── Image loading ─────────────────────────────────────────────────────────────
+
+function loadImage(url) {
+  return new Promise(function(res, rej) {
+    const img = new Image();
+    img.onload  = function() { res(img); };
+    img.onerror = function() { rej(new Error("Error cargando " + url)); };
+    img.src = url;
+  });
 }
 
-function applyFactor(hex, f) {
-  const [r, g, b] = hexToRgb(hex);
-  return "rgb(" + Math.round(r*f) + "," + Math.round(g*f) + "," + Math.round(b*f) + ")";
-}
+// ── Biome pixel index ─────────────────────────────────────────────────────────
 
-function computeTileColor(tile) {
-  let f = 1.0;
-  if (layers.topo)      f *= tile.shade     ?? 1.0;
-  if (layers.hillshade) f *= tile.hillshade ?? 1.0;
-  return f === 1.0 ? tile.color : applyFactor(tile.color, f);
+function buildBiomePixels() {
+  const tmp     = new Map();
+  const bx4_min = pngBounds.bx4_min;
+  const bz4_min = pngBounds.bz4_min;
+  for (const entry of tiRaw) {
+    const pi = entry[2];
+    if (!tmp.has(pi)) tmp.set(pi, []);
+    tmp.get(pi).push(entry[0] - bx4_min, entry[1] - bz4_min);
+  }
+  biomePixels = new Map();
+  for (const kv of tmp) {
+    biomePixels.set(kv[0], new Int32Array(kv[1]));
+  }
 }
 
 // ── Canvas rendering ──────────────────────────────────────────────────────────
@@ -162,74 +187,99 @@ function buildTileMap() {
   for (const t of allTiles) tileMap.set(t.bx4 + "," + t.bz4, t);
 }
 
-function computeBoundsInfo() {
-  if (!allTiles.length) return null;
-  let minBx4 = Infinity, maxBx4 = -Infinity;
-  let minBz4 = Infinity, maxBz4 = -Infinity;
-  for (const t of allTiles) {
-    if (t.bx4 < minBx4) minBx4 = t.bx4;
-    if (t.bx4 > maxBx4) maxBx4 = t.bx4;
-    if (t.bz4 < minBz4) minBz4 = t.bz4;
-    if (t.bz4 > maxBz4) maxBz4 = t.bz4;
-  }
-  return { minBx4, maxBx4, minBz4, maxBz4, w: maxBx4-minBx4+1, h: maxBz4-minBz4+1 };
+function overlayBounds() {
+  const b = boundsInfo;
+  return [[ -(b.maxBz4+1), b.minBx4 ], [ -b.minBz4, b.maxBx4+1 ]];
 }
 
-function overlayBounds() {
-  const {minBx4, maxBx4, minBz4, maxBz4} = boundsInfo;
-  return [[ -(maxBz4+1), minBx4 ], [ -minBz4, maxBx4+1 ]];
+function applyBiomeOverlay(ctx, w, h) {
+  if (!tiRaw.length) return;
+  const hasHidden = tiPalette.some(function(p) { return biomeVisibility[p.name] === false; });
+  const hasHighlight = highlightedBiome !== null;
+  if (!hasHidden && !hasHighlight) return;
+
+  const ov   = document.createElement("canvas");
+  ov.width = w; ov.height = h;
+  const oc   = ov.getContext("2d");
+  const imgd = oc.createImageData(w, h);
+  const d    = imgd.data;
+
+  if (hasHighlight) {
+    // Dim all pixels
+    for (let i = 3; i < d.length; i += 4) d[i] = 175;
+    // Punch out highlighted biome (make transparent in overlay)
+    var hlIdx = -1;
+    for (var pi = 0; pi < tiPalette.length; pi++) {
+      if (tiPalette[pi].name === highlightedBiome) { hlIdx = pi; break; }
+    }
+    if (hlIdx >= 0 && biomePixels.has(hlIdx)) {
+      const coords = biomePixels.get(hlIdx);
+      for (let i = 0; i < coords.length; i += 2) {
+        d[(coords[i+1] * w + coords[i]) * 4 + 3] = 0;
+      }
+    }
+  }
+
+  // Cover hidden biomes with background color
+  for (const kv of biomePixels) {
+    const pi = kv[0], coords = kv[1];
+    if (biomeVisibility[tiPalette[pi].name] === false) {
+      for (let i = 0; i < coords.length; i += 2) {
+        const px = (coords[i+1] * w + coords[i]) * 4;
+        d[px] = 0x1a; d[px+1] = 0x1a; d[px+2] = 0x1a; d[px+3] = 255;
+      }
+    }
+  }
+
+  oc.putImageData(imgd, 0, 0);
+  ctx.drawImage(ov, 0, 0);
 }
 
 function drawMainCanvas() {
-  if (!boundsInfo) return;
-  const {minBx4, minBz4, w, h} = boundsInfo;
+  if (!boundsInfo || !pngLayers) return;
+  const w = boundsInfo.w, h = boundsInfo.h;
 
   const canvas = document.createElement("canvas");
   canvas.width = w; canvas.height = h;
   const ctx = canvas.getContext("2d");
-  const img = ctx.createImageData(w, h);
-  const d   = img.data;
 
-  const hl = highlightedBiome;
-  for (const t of allTiles) {
-    if (biomeVisibility[t.biome] === false) continue;
-    const [r, g, b] = hexToRgb(t.color);
-    let f = 1.0;
-    if (layers.topo)      f *= t.shade     ?? 1.0;
-    if (layers.hillshade) f *= t.hillshade ?? 1.0;
-    const isHighlighted = hl !== null && t.biome === hl;
-    const isDimmed      = hl !== null && t.biome !== hl;
-    const colorF = isDimmed ? f * 0.25 : f;
-    const alpha  = isHighlighted ? 255 : isDimmed ? 55 : 217;
-    const i = ((t.bz4 - minBz4) * w + (t.bx4 - minBx4)) * 4;
-    d[i]   = Math.min(255, Math.round(r * colorF));
-    d[i+1] = Math.min(255, Math.round(g * colorF));
-    d[i+2] = Math.min(255, Math.round(b * colorF));
-    d[i+3] = alpha;
+  ctx.drawImage(pngLayers.base, 0, 0);
+
+  if (layers.topo) {
+    ctx.globalCompositeOperation = "multiply";
+    ctx.drawImage(pngLayers.shade, 0, 0);
+    ctx.globalCompositeOperation = "source-over";
+  }
+  if (layers.hillshade) {
+    ctx.globalCompositeOperation = "multiply";
+    ctx.drawImage(pngLayers.hillshade, 0, 0);
+    ctx.globalCompositeOperation = "source-over";
   }
 
-  ctx.putImageData(img, 0, 0);
+  if (layers.isolines) {
+    ctx.drawImage(pngLayers.isolines, 0, 0);
+  }
+  if (layers.blocks) {
+    ctx.drawImage(pngLayers.blocks, 0, 0);
+  }
+  applyBiomeOverlay(ctx, w, h);
+
   const url    = canvas.toDataURL("image/png");
   const bounds = overlayBounds();
-
   if (imageOverlay) {
     imageOverlay.setUrl(url);
   } else {
-    imageOverlay = L.imageOverlay(url, bounds, { opacity: 1, interactive: false })
-      .addTo(map);
+    imageOverlay = L.imageOverlay(url, bounds, { opacity: 1, interactive: false }).addTo(map);
   }
 }
 
 function renderTiles() {
   buildTileMap();
-  boundsInfo = computeBoundsInfo();
   if (imageOverlay) { imageOverlay.remove(); imageOverlay = null; }
   drawMainCanvas();
 }
 
-function rerenderTiles() {
-  drawMainCanvas();
-}
+function rerenderTiles() { drawMainCanvas(); }
 
 // ── Tooltip via mousemove ────────────────────────────────────────────────────
 
@@ -254,6 +304,7 @@ map.on("mouseout", function() { floatingTooltip.style.display = "none"; });
 function onLayerChange() {
   layers.topo      = document.getElementById("layer-topo").checked;
   layers.hillshade = document.getElementById("layer-hillshade").checked;
+  layers.blocks    = document.getElementById("layer-blocks").checked;
   rerenderTiles();
 }
 
@@ -281,14 +332,16 @@ function toggleAllBiomes(visible) {
 
 // ── Tooltip content ──────────────────────────────────────────────────────────
 
-
 function buildTooltip(t) {
   const name = t.biome.replace("minecraft:", "").replace(/_/g, " ");
   const bx   = t.bx4 * 4, bz = t.bz4 * 4;
   const cx   = Math.floor(t.bx4 / 4), cz = Math.floor(t.bz4 / 4);
   const yStr = t.ws != null ? "<br>Altura: " + Math.round(t.ws) + " Y" : "";
+  const blockStr = t.block
+    ? "<br>Bloque: " + t.block.replace("minecraft:","").replace(/_/g," ")
+    : "";
   return "<strong>" + name + "</strong>" +
-         "<br>Bloque: (" + bx + ", " + bz + ")<br>Chunk: (" + cx + ", " + cz + ")" + yStr;
+         "<br>Bloque: (" + bx + ", " + bz + ")<br>Chunk: (" + cx + ", " + cz + ")" + yStr + blockStr;
 }
 
 // ── Legend ───────────────────────────────────────────────────────────────────
@@ -300,9 +353,8 @@ function buildLegend(distribution) {
     if (biomeVisibility[b] === undefined) biomeVisibility[b] = true;
   });
   Object.entries(distribution).forEach(function(entry) {
-    const biome = entry[0], count = entry[1];
-    const t     = allTiles.find(function(c) { return c.biome === biome; });
-    const color = t ? t.color : "#888";
+    const biome = entry[0];
+    const color = biomeColorMap.get(biome) || "#888";
     const name  = biome.replace("minecraft:", "").replace(/_/g, " ");
     const item  = document.createElement("div");
     item.className = "legend-item" + (biomeVisibility[biome] !== false ? "" : " hidden");
@@ -350,8 +402,8 @@ function goToSpawn() {
 
 function resetView() {
   if (!boundsInfo) return;
-  const {minBx4, maxBx4, minBz4, maxBz4} = boundsInfo;
-  map.fitBounds([mc2ll(minBx4, minBz4+1), mc2ll(maxBx4+1, minBz4)], { padding: [20, 20] });
+  const b = boundsInfo;
+  map.fitBounds([mc2ll(b.minBx4, b.minBz4+1), mc2ll(b.maxBx4+1, b.minBz4)], { padding: [20, 20] });
 }
 
 // ── Data loading ─────────────────────────────────────────────────────────────
@@ -360,36 +412,72 @@ async function loadChunks() {
   document.getElementById("loading").style.display = "flex";
   setStatus("Consultando API...");
   try {
-    document.getElementById("loading-msg").textContent = "Descargando datos del mundo...";
-    const [tilesRes, statsRes, spawnRes] = await Promise.all([
-      fetch(API + "/api/chunks"),
+    // Phase 1: PNGs + stats (fast — muestra el mapa enseguida)
+    document.getElementById("loading-msg").textContent = "Descargando mapa...";
+    const [basePng, shadePng, hillshadePng, isolinesPng, blocksPng, statsRes, spawnRes] = await Promise.all([
+      loadImage(API + "/api/map.png?layer=base"),
+      loadImage(API + "/api/map.png?layer=shade"),
+      loadImage(API + "/api/map.png?layer=hillshade"),
+      loadImage(API + "/api/map.png?layer=isolines"),
+      loadImage(API + "/api/map.png?layer=blocks"),
       fetch(API + "/api/stats"),
       fetch(API + "/api/spawn"),
     ]);
-    if (!tilesRes.ok) throw new Error("HTTP " + tilesRes.status);
 
-    document.getElementById("loading-msg").textContent = "Procesando tiles...";
-    const tilesData = await tilesRes.json();
+    pngLayers = { base: basePng, shade: shadePng, hillshade: hillshadePng, isolines: isolinesPng, blocks: blocksPng };
     lastStats = await statsRes.json();
-    allTiles  = tilesData.tiles;
+    pngBounds = lastStats.map_bounds;
 
-    document.getElementById("loading-msg").textContent = "Renderizando mapa...";
-    // Yield to browser to update the loading message before heavy work
-    await new Promise(function(r) { setTimeout(r, 0); });
+    boundsInfo = {
+      minBx4: pngBounds.bx4_min, maxBx4: pngBounds.bx4_max,
+      minBz4: pngBounds.bz4_min, maxBz4: pngBounds.bz4_max,
+      w: pngBounds.bx4_max - pngBounds.bx4_min + 1,
+      h: pngBounds.bz4_max - pngBounds.bz4_min + 1,
+    };
 
-    renderTiles();
-    buildLegend(lastStats.biome_distribution);
+    // Mostrar mapa inmediatamente
+    document.getElementById("loading").style.display = "none";
+    drawMainCanvas();
     resetView();
     if (spawnRes.ok) renderSpawn(await spawnRes.json());
+    document.getElementById("world-path").textContent = lastStats.world_path || "—";
+    setStatus("Cargando interactividad...");
+
+    // Phase 2: tile-index (necesario para tooltips y toggle de biomas)
+    const tiRes = await fetch(API + "/api/tile-index");
+    if (!tiRes.ok) throw new Error("tile-index HTTP " + tiRes.status);
+
+    const ti = await tiRes.json();
+    tiRaw     = ti.tiles;
+    tiPalette = ti.palette;
+    biomeColorMap = new Map(tiPalette.map(function(p) { return [p.name, p.color]; }));
+
+    // Construir allTiles para tileMap (tooltips)
+    allTiles = tiRaw.map(function(entry) {
+      var blk = (ti.block_palette && entry[4] !== undefined)
+                ? ti.block_palette[entry[4]] : null;
+      return {
+        bx4:   entry[0],
+        bz4:   entry[1],
+        biome: tiPalette[entry[2]].name,
+        color: tiPalette[entry[2]].color,
+        ws:    entry[3],
+        block: (blk && blk !== "null") ? blk : null,
+      };
+    });
+
+    buildBiomePixels();
+    buildTileMap();
+    buildLegend(lastStats.biome_distribution);
 
     const chunks = (lastStats.total_full_chunks || 0).toLocaleString();
-    const hRange = lastStats.height_range ? " | Y " + lastStats.height_range.min + "–" + lastStats.height_range.max : "";
+    const hRange = lastStats.height_range
+      ? " | Y " + lastStats.height_range.min + "–" + lastStats.height_range.max
+      : "";
     setStatus(allTiles.length.toLocaleString() + " tiles — " + chunks + " chunks" + hRange);
-    document.getElementById("world-path").textContent = lastStats.world_path || "—";
   } catch (e) {
     setStatus("Error: " + e.message);
     console.error(e);
-  } finally {
     document.getElementById("loading").style.display = "none";
   }
 }

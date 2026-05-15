@@ -24,7 +24,7 @@ err()  { echo -e "${RED}[error]${NC} $1"; exit 1; }
 
 echo ""
 echo "╔══════════════════════════════════════════╗"
-echo "║   mc-chunk-map  ·  v3.1.0                ║"
+echo "║   mc-chunk-map  ·  v4.0.0                ║"
 echo "╚══════════════════════════════════════════╝"
 echo ""
 log "Ruta del mundo: $WORLD_PATH"
@@ -65,7 +65,7 @@ source venv/bin/activate
 
 log "Instalando dependencias Python..."
 pip install --quiet --upgrade pip
-pip install --quiet     fastapi     "uvicorn[standard]"
+pip install --quiet fastapi "uvicorn[standard]" pillow
 
 ok "Dependencias instaladas"
 deactivate

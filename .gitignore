@@ -6,7 +6,7 @@ backend/*.pyc
 # Datos generados en runtime
 backend/chunk_cache.json
 backend/chunk_cache.tmp
-backend/map_*.png
+backend/map_images/
 
 # Secrets y configuración local
 backend/.env

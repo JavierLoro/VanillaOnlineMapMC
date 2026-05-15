@@ -1,248 +1,191 @@
 # mc-chunk-map
 
-Visor de mapa de biomas para mundos Minecraft Java Edition. Lee los archivos `.mca` directamente del servidor —sin plugins, sin modificar nada— y renderiza un mapa interactivo en el navegador con colores por bioma a resolución de **4×4 bloques por píxel** (la máxima que permite el formato Anvil).
+Interactive biome and terrain map viewer for Minecraft Java Edition worlds. Reads `.mca` files directly — no plugins, no server modifications — and renders a fast, progressive map in the browser with biome colors, topography, hillshading, and player structure detection.
+
+---
+
+## Features
+
+- **Biome colors** — 60+ biomes, each with a distinct color
+- **Topography** — height-based shading showing terrain elevation
+- **Hillshading** — simulated directional lighting from the NW
+- **Contour lines** — isoline marks at height discontinuities > 20 blocks
+- **Block layer** — shows player-built structures (planks, stone bricks, glass, wool…) over natural terrain using actual top-block data
+- **Active zone** — configurable radius that refreshes top-block data periodically to detect new constructions without a full world re-scan
+- **Progressive loading** — map image appears in ~1s; tile index loads in background enabling tooltips and biome toggles
+- **Biome legend** — toggle visibility, click to highlight individual biomes
+- **Tooltips** — biome, coordinates, height, and top block name on hover
+- **Spawn marker** — reads `level.dat` to place the world spawn
+- **Persistent cache** — processed chunks stored in `chunk_cache.json`; only new/changed chunks are re-parsed on restart
+- **Zero server interference** — read-only access to world files
+
+---
+
+## Architecture
 
 ```
-mc-chunk-map/
-├── setup.sh                  ← script de instalación (genera .env y .service)
-├── docker-compose.yml        ← despliegue alternativo con Docker
-├── README.md
-├── backend/
-│   ├── main.py               ← FastAPI + parser NBT/MCA propio (sin deps externas)
-│   ├── chunk_cache.json      ← caché persistente por chunk (generado automáticamente)
-│   └── Dockerfile
-├── frontend/
-│   └── index.html            ← Leaflet.js, sin build step
-└── nginx/
-    └── mc-chunk-map.conf     ← bloque para Nginx Proxy Manager
+.mca files (Anvil format)
+        │
+        ▼
+  Python parser (NBT, no external deps)
+        │
+        ▼
+  Persistent chunk cache (chunk_cache.json)
+        │
+        ▼
+  FastAPI backend ──→ Server-side PNG rendering (Pillow)
+        │                    map_base.png       ← biome colors
+        │                    map_shade.png      ← topography
+        │                    map_hillshade.png  ← hillshading
+        │                    map_isolines.png   ← contour lines
+        │                    map_blocks.png     ← player structures
+        │                    tile_index.json.gz ← tile metadata
+        ▼
+  Leaflet.js frontend (canvas GPU compositing)
 ```
 
 ---
 
-## Requisitos
+## Requirements
 
-- Python 3.11+ con `python3-pip` y `python3-venv`
-- Acceso de lectura al directorio del mundo Minecraft
-- Puerto 8200 libre (configurable)
-
----
-
-## WORLD_PATH — ruta correcta
-
-El `WORLD_PATH` debe apuntar al directorio que contiene la carpeta `region/`. Esto varía según la versión del servidor:
-
-| Versión / tipo | WORLD_PATH |
-|---|---|
-| Java 1.18+ (Paper, Vanilla, Fabric…) | `<raíz_mundo>/dimensions/minecraft/overworld` |
-| Java < 1.18 o mundos legados | `<raíz_mundo>` |
-
-El archivo `level.dat` (spawn, semilla…) se busca automáticamente subiendo desde `WORLD_PATH` hasta encontrarlo.
-
-**Ejemplo con Paper 1.21 en `/opt/minecraft/`:**
-```
-WORLD_PATH=/opt/minecraft/world/dimensions/minecraft/overworld
-```
+- Python 3.11+
+- `python3-pip`, `python3-venv`
+- [Pillow](https://pillow.readthedocs.io/) (installed automatically by `setup.sh`)
+- Read access to the Minecraft world directory
+- Port 8200 free (configurable)
+- Minecraft Java Edition **1.18+** (see [version support](#minecraft-version-support))
 
 ---
 
-## Despliegue rápido (systemd)
+## Quick start (systemd)
 
 ```bash
-# 1. Extraer el zip
-cd /opt && unzip mc-chunk-map.zip
+# 1. Clone the project
+cd /opt && git clone https://github.com/YOUR_USER/mc-chunk-map.git
 
-# 2. Instalar python3-pip y python3-venv si no están (Debian/Ubuntu)
-apt-get install -y python3-pip python3-venv
-
-# 3. Ejecutar setup (ajusta la ruta al mundo)
+# 2. Run setup (adjust path to your world)
 cd mc-chunk-map
 bash setup.sh /opt/minecraft/world/dimensions/minecraft/overworld
 
-# 4. Instalar y activar el servicio
+# 3. Install and start the service
 cp mc-chunk-map.service /etc/systemd/system/
 systemctl daemon-reload
 systemctl enable --now mc-chunk-map
 
-# 5. Verificar
+# 4. Verify
 curl http://localhost:8200/api/stats
 ```
 
-Abre `http://IP_SERVIDOR:8200` en el navegador.
+Open `http://SERVER_IP:8200` in your browser.
 
 ---
 
-## Despliegue con Docker
+## Quick start (Docker)
 
 ```bash
-# Ajusta WORLD_PATH en docker-compose.yml si es necesario
+# Edit WORLD_PATH in docker-compose.yml if needed, then:
 docker compose up -d
+```
+
+---
+
+## WORLD_PATH — getting it right
+
+`WORLD_PATH` must point to the directory that **contains** `region/`. This varies by server type:
+
+| Server type | WORLD_PATH |
+|---|---|
+| Java 1.18+ (Vanilla, Paper, Fabric…) | `<world_root>/dimensions/minecraft/overworld` |
+| Java < 1.18 or legacy worlds | `<world_root>` |
+
+**Example with Paper 1.21 at `/opt/minecraft/`:**
+```
+WORLD_PATH=/opt/minecraft/world/dimensions/minecraft/overworld
+```
+
+To find the correct path: `find <world_root> -name "r.*.*.mca" | head -3` — `WORLD_PATH` is the parent directory of those `.mca` files.
+
+---
+
+## Environment variables
+
+| Variable | Default | Description |
+|---|---|---|
+| `WORLD_PATH` | `/opt/minecraft/world` | Path to the directory containing `region/` |
+| `HOST` | `0.0.0.0` | Listen address |
+| `PORT` | `8200` | Listen port |
+| `CACHE_TTL` | `120` | Seconds between mtime checks (not a full re-scan) |
+| `LOG_LEVEL` | `info` | `debug` / `info` / `warning` |
+| `ACTIVE_ZONE_CENTER_X` | `0` | Block X coordinate of the active zone center |
+| `ACTIVE_ZONE_CENTER_Z` | `0` | Block Z coordinate of the active zone center |
+| `ACTIVE_ZONE_RADIUS` | `32` | Radius in chunks for top-block tracking |
+| `ACTIVE_ZONE_TTL` | `3600` | Seconds between active zone refreshes |
+
+### Active zone
+
+The active zone is a configurable area (default: 32-chunk / 512-block radius around 0,0) where the top block of every tile is tracked. This enables the **Structures** layer and detects player-built buildings without scanning the entire world.
+
+Set the center to your main base coordinates:
+
+```env
+ACTIVE_ZONE_CENTER_X=512
+ACTIVE_ZONE_CENTER_Z=-256
 ```
 
 ---
 
 ## Nginx Proxy Manager
 
-1. Nuevo Proxy Host: `map.tudominio.com` → `localhost:8200`
-2. En "Advanced" pega el contenido de `nginx/mc-chunk-map.conf`
-3. Activa SSL con Let's Encrypt
+1. New Proxy Host: `map.yourdomain.com` → `localhost:8200`
+2. In "Advanced" paste the contents of `nginx/mc-chunk-map.conf`
+3. Enable SSL with Let's Encrypt
 
 ---
 
 ## API
 
-| Endpoint | Método | Descripción |
+| Endpoint | Method | Description |
 |---|---|---|
 | `/` | GET | Frontend HTML |
-| `/api/chunks` | GET | Lista de tiles 4×4 con bioma y color |
-| `/api/stats` | GET | Estadísticas del mundo |
-| `/api/spawn` | GET | Coordenadas del spawn (lee `level.dat`) |
-| `/api/biomes` | GET | Paleta de biomas conocidos con colores |
-| `/api/refresh` | POST | Invalida caché y fuerza re-scan |
-
-### Parámetros `/api/chunks`
-
-```
-?biome=minecraft:forest
-?bx4_min=-100&bx4_max=100&bz4_min=-100&bz4_max=100
-```
-
-Las coordenadas `bx4`/`bz4` son unidades de 4 bloques. Para convertir a bloques: `bx4 * 4`.
-
-### Respuesta `/api/stats`
-
-```json
-{
-  "total_tiles": 10400,
-  "total_full_chunks": 650,
-  "total_regions": 4,
-  "biome_distribution": { "minecraft:snowy_plains": 5342, ... }
-}
-```
-
-### Respuesta `/api/spawn`
-
-```json
-{ "x": 0, "y": 117, "z": 0, "bx4": 0, "bz4": 0, "chunk_x": 0, "chunk_z": 0, "dimension": "minecraft:overworld" }
-```
+| `/api/map.png?layer=<layer>` | GET | Pre-rendered PNG layer (`base`, `shade`, `hillshade`, `isolines`, `blocks`) |
+| `/api/tile-index` | GET | Gzipped JSON with tile metadata (biome palette, block palette, per-tile data) |
+| `/api/stats` | GET | World statistics |
+| `/api/spawn` | GET | Spawn coordinates from `level.dat` |
+| `/api/biomes` | GET | Known biome palette with colors |
+| `/api/chunks` | GET | Full tile list (large — prefer tile-index for frontend use) |
+| `/api/refresh` | POST | Force re-scan of the active zone |
 
 ---
 
-## Variables de entorno (`.env`)
+## Proxmox / LXC multi-container
 
-| Variable | Default | Descripción |
-|---|---|---|
-| `WORLD_PATH` | `/opt/minecraft/world` | Ruta al directorio que contiene `region/` |
-| `HOST` | `0.0.0.0` | IP de escucha |
-| `PORT` | `8200` | Puerto |
-| `CACHE_TTL` | `120` | Segundos entre comprobaciones de mtime (no re-scan completo) |
-| `LOG_LEVEL` | `info` | `debug` / `info` / `warning` |
-
----
-
-## Proxmox / LXC multi-contenedor
-
-Si el servidor Minecraft corre en un LXC diferente, monta el mundo como bind mount de solo lectura:
+If Minecraft runs in a different LXC container, bind-mount the world read-only:
 
 ```ini
-# /etc/pve/lxc/<ID_LXC_MAPA>.conf
-mp0: /ruta/al/mundo,mp=/opt/minecraft/world,ro=1
+# /etc/pve/lxc/<MAP_CT_ID>.conf
+mp0: /path/to/minecraft/world,mp=/opt/minecraft/world,ro=1
 ```
 
-Ajusta `WORLD_PATH` según la estructura del mundo montado.
+Then set `WORLD_PATH` accordingly.
 
 ---
 
-## Versiones Minecraft soportadas
+## Minecraft version support
 
-- Java Edition **1.18 – 1.21+** — soporte completo (biomas por sección, resolución 4×4)
-- Java Edition **1.16 – 1.17** — chunks mostrados, biomas a nivel de chunk (sin `data` array)
-- Java Edition **< 1.16** — chunks en gris (`unknown`), biomas almacenados como integers
-
----
-
-## Notas técnicas
-
-- El parser NBT es propio, sin dependencias externas.
-- Solo se renderizan chunks con `Status: minecraft:full` (terrain completamente generado).
-- Los biomas de cueva (`deep_dark`, `dripstone_caves`, `lush_caves`) se excluyen del mapa superficial.
-- **Caché persistente por chunk**: los chunks procesados se guardan en `backend/chunk_cache.json`. Al reiniciar el servicio se carga del disco — cero re-parseo.
-- Cuando el servidor Minecraft genera chunks nuevos, el `.mca` cambia su `mtime`. Solo se reparsean los chunks nuevos de ese archivo; los ya conocidos se reusan directamente.
-- `CACHE_TTL` controla cada cuántos segundos se comprueban los `mtime` de los `.mca`, no cuándo se re-lee todo.
-- Uso de memoria: ~50 MB en reposo. Solo lectura sobre el mundo, `chunk_cache.json` es la única escritura.
+| Version | Biomes | Heightmap | Top block (Structures layer) |
+|---|---|---|---|
+| Java 1.18 – 1.21+ | ✅ Full (per-section, 4×4 resolution) | ✅ | ✅ |
+| Java 1.16 – 1.17 | ⚠️ Chunk-level only | ✅ | ❌ |
+| Java < 1.16 | ❌ Shown as `unknown` | ❌ | ❌ |
 
 ---
 
-## Despliegue con agente IA (Claude u otro)
+## Technical notes
 
-Esta sección documenta los pasos exactos para que un agente de IA instale el servicio de forma autónoma.
-
-### Información que el agente necesita antes de empezar
-
-Proporciona estos datos al agente:
-
-1. **Sistema operativo** del host (Debian, Ubuntu, etc.) y versión
-2. **Ruta raíz del mundo Minecraft** (el directorio que contiene `level.dat`)
-3. **ID o IP del contenedor/servidor** donde se va a instalar
-4. **Puerto deseado** (por defecto 8200)
-5. Si usa Proxmox LXC: si el Minecraft está en otro CT y hay que hacer bind mount
-
-### Prompt sugerido para el agente
-
-```
-Instala el servicio mc-chunk-map en [CT ID / IP].
-El zip está en [ruta del zip].
-La raíz del mundo Minecraft está en [ruta, ej: /opt/minecraft/world].
-El sistema operativo es [Debian 13 / Ubuntu 24.04 / etc.].
-```
-
-### Pasos que debe ejecutar el agente (en orden)
-
-```bash
-# PASO 1 — Verificar Python 3.11+
-python3 --version
-# Si < 3.11: apt-get install -y python3.11
-
-# PASO 2 — Instalar pip y venv (Debian/Ubuntu no los incluyen por defecto)
-apt-get update -qq
-apt-get install -y python3-pip python3-venv
-
-# PASO 3 — Extraer el zip
-cd /opt && unzip <zip> -d .
-cd mc-chunk-map
-
-# PASO 4 — Determinar WORLD_PATH correcto
-# El agente debe buscar la carpeta region/ dentro del mundo:
-#   Opción A (Java 1.18+): <raíz>/dimensions/minecraft/overworld/region/  ← más común
-#   Opción B (legacy):     <raíz>/region/
-# WORLD_PATH es el directorio PADRE de region/, no region/ en sí.
-find <raíz_mundo> -name "r.*.*.mca" | head -3
-# La ruta hasta el directorio que contiene esos .mca es el WORLD_PATH
-
-# PASO 5 — Ejecutar setup.sh con el WORLD_PATH correcto
-bash setup.sh <WORLD_PATH>
-
-# PASO 6 — Instalar el servicio systemd
-cp mc-chunk-map.service /etc/systemd/system/
-systemctl daemon-reload
-systemctl enable --now mc-chunk-map
-
-# PASO 7 — Verificar que el servicio está activo
-systemctl status mc-chunk-map
-curl -s http://localhost:8200/api/stats
-curl -s http://localhost:8200/api/spawn
-
-# PASO 8 — Confirmar que hay chunks
-# Si total_full_chunks > 0 en /api/stats: instalación correcta.
-# Si total_full_chunks = 0: el WORLD_PATH apunta al lugar incorrecto.
-#   Revisar con: ls <WORLD_PATH>/region/
-```
-
-### Errores comunes que el agente debe saber resolver
-
-| Error | Causa | Solución |
-|---|---|---|
-| `pip3 no encontrado` en setup.sh | pip3 no instalado | `apt-get install -y python3-pip python3-venv` |
-| `total_full_chunks: 0` en stats | WORLD_PATH incorrecto | Buscar `r.*.*.mca` con `find` y ajustar la ruta |
-| `level.dat no encontrado` en `/api/spawn` | WORLD_PATH muy profundo | `level.dat` debe estar 3 niveles arriba de WORLD_PATH; verificar estructura |
-| Puerto 8200 ocupado | Otro proceso en el puerto | Cambiar `PORT` en `backend/.env` y reiniciar el servicio |
-| Chunks se muestran todos grises | Mundo pre-1.16 | Versión no soportada para colores; chunks visibles pero sin bioma |
+- **NBT parser** is custom — zero external dependencies beyond Pillow and FastAPI.
+- Only chunks with `Status: minecraft:full` are rendered (fully generated terrain).
+- Cave biomes (`deep_dark`, `dripstone_caves`, `lush_caves`) are excluded from the surface map.
+- **Persistent cache**: processed chunks are stored in `backend/chunk_cache.json`. On restart, only new or changed `.mca` files trigger re-parsing — unchanged chunks load from disk instantly.
+- **Performance**: the backend generates server-side PNGs (≈3 MB total) instead of sending raw JSON. The map appears in ~1s on a 20 Mbps connection vs 80s+ with raw chunk data.
+- **Memory at rest**: ~50 MB. Read-only on the world; `chunk_cache.json` is the only write.
+- **GPU compositing**: the frontend stacks PNG layers on an HTML5 canvas using multiply blend mode for shade/hillshading. No per-tile DOM elements.
