@@ -14,9 +14,11 @@ scoreboard players reset @s vm_pin_x
 scoreboard players reset @s vm_pin_z
 data modify storage vanilla_map:work args.uuid set from entity @s UUID
 function vanilla_map:points/ensure with storage vanilla_map:work args
-data modify storage floating_ui:input data set value {type:"button",tag:"vm_surface",size:[4.8f,2.7f],item:{id:"minecraft:paper"},model:"vanilla_map:view/0/0/0",display:"none",rotation:[0f,0f,0f,1f],left_click:"vanilla_map:input/left",right_click:"vanilla_map:input/right",roll:"vanilla_map:input/roll",move:"vanilla_map:input/move",move_in:"vanilla_map:input/move"}
+data modify storage floating_ui:input data set value {type:"button",tag:"vm_surface",size:[4.8f,2.7f],item:{id:"minecraft:paper"},model:"vanilla_map:view/0/0/0",display:"none",rotation:[0f,0f,0f,1f],init:"vanilla_map:map/size_surface",left_click:"vanilla_map:input/left",right_click:"vanilla_map:input/right",roll:"vanilla_map:input/roll",move:"vanilla_map:input/move",move_in:"vanilla_map:input/move"}
 tag @s add vm_opening
-function floating_ui:.player_new_ui
+tag @s add floating_ui_owner
+execute anchored eyes positioned ^ ^ ^2.2 facing entity @s eyes summon minecraft:item_display run function floating_ui:_new_ui
+tag @s remove floating_ui_owner
 execute as @e[type=minecraft:item_display,tag=vm_surface,distance=..8] if score @s floating_ui.uid = @p[tag=vm_opening] floating_ui.uid on vehicle run tag @s add vm_root
 scoreboard players operation #owner vm_state = @s floating_ui.uid
 scoreboard players set #near vm_state 0

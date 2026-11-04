@@ -155,8 +155,8 @@ def build_packs(render_dir, checkout, output):
                     json_file(pack, f"assets/vanilla_map/items/{key}.json", {"model": {
                         "type": "minecraft:model", "model": f"vanilla_map:{key}"
                     }})
-                    faces = {"south": {"uv": [0, 0, 16, 16], "texture": "#map"},
-                             "north": {"uv": [16, 0, 0, 16], "texture": "#map"}}
+                    faces = {face: {"uv": [0, 0, 16, 16], "texture": "#map"}
+                             for face in ("north", "south")}
                     json_file(pack, f"assets/vanilla_map/models/{key}.json", {
                         "ambientocclusion": False, "textures": {"map": f"vanilla_map:{texture}"},
                         "elements": [{"from": [0, 0, 8], "to": [16, 16, 8], "faces": faces,

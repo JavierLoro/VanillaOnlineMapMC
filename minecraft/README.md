@@ -38,6 +38,6 @@ Si ves un cuadro morado y negro, verifica que `vanilla-map-resources.zip` figure
 | `List` / `Del` | Recorre hasta 16 puntos guardados o borra el punto guardado activo. |
 | Agacharse o `Exit` | Cierra el panel. |
 
-El blanco indica tu posición, el azul la selección y el dorado los puntos guardados. El mapa abre en la vista general y navega entre vistas prerenderizadas. Floating UI interpreta la rueda a partir de los cambios de ranura de la barra rápida, así que las teclas numéricas también pueden cambiar el zoom. El panel se dibuja en el mundo y el terreno cercano puede taparlo. Prueba el campo de visión, los clics y la rueda con dos jugadores antes de instalarlo en el mundo principal.
+El blanco indica tu posición, el azul la selección y el dorado los puntos guardados. El mapa abre en la vista general y navega entre vistas prerenderizadas. Floating UI interpreta la rueda a partir de los cambios de ranura de la barra rápida, así que las teclas numéricas también pueden cambiar el zoom. El panel se dibuja frente a ti en proporción 16:9. La parte de la pantalla que cubre depende del campo de visión y de la forma de la ventana. El terreno cercano puede taparlo.
 
 Floating UI mantiene cuatro chunks cargados alrededor del origen del Overworld para sus entidades auxiliares. La integración retira sus propios paneles al cerrarlos, desconectarse o alejarse.
