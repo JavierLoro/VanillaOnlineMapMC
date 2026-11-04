@@ -74,6 +74,17 @@ def export_upstream(checkout, output):
                             'block_state:{Name:"barrier"}', 'block_state:"minecraft:barrier"'
                         )
                         pack.writestr(path, commands)
+                    elif path == "data/floating_ui/function/element/button/event/roll_event.mcfunction":
+                        pack.writestr(path, "function floating_ui:element/control/event/roll_event\n")
+                    elif path == "data/floating_ui/function/dispose/player.mcfunction":
+                        commands = file.read_text(encoding="utf-8").replace(
+                            "execute store result score test floating_ui.temp as @e[tag=floating_ui_root] "
+                            "if score @s floating_ui.uid = curr_player_uid floating_ui.temp",
+                            "execute as @e[tag=floating_ui_root] "
+                            "if score @s floating_ui.uid = curr_player_uid floating_ui.temp "
+                            "run scoreboard players set test floating_ui.temp 1",
+                        )
+                        pack.writestr(path, commands)
                     elif path == "data/floating_ui/function/ray/move/root_check_point.mcfunction":
                         commands = file.read_text(encoding="utf-8").replace(
                             "execute at 1bf52-0-0-0-0 run function math:_particle", ""

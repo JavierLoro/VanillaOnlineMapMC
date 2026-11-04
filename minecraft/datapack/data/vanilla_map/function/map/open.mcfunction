@@ -3,6 +3,7 @@ execute unless dimension minecraft:overworld run return run tellraw @s {"text":"
 execute unless function floating_ui:util/check/world_entity run return run tellraw @s {"text":"Map controls are still starting. Try again in a moment.","color":"yellow"}
 execute unless score @s floating_ui.uid matches 0.. run function floating_ui:util/player_uid
 execute if entity @s[tag=vm_opened] run function vanilla_map:map/close
+execute store result score @s floating_ui.slot run data get entity @s SelectedItemSlot
 scoreboard players set @s vm_zoom 0
 scoreboard players set @s vm_col 0
 scoreboard players set @s vm_row 0
