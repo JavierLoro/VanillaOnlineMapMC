@@ -378,13 +378,13 @@ def _top_block_4x4(sections: list, ws_grid: list) -> dict:
             raw_y = ws_grid[z_loc * 16 + x_loc]
             wy    = raw_y - 64 - 1  # WORLD_SURFACE apunta a Y+1 del bloque real
             sec   = sec_by_y.get(wy >> 4)
-            block = "minecraft:air"
+            block_state = None
             if sec:
                 bs      = sec.get("block_states", {})
                 palette = bs.get("palette", [])
                 if palette:
                     if len(palette) == 1:
-                        block = palette[0].get("Name", "minecraft:air")
+                        block_state = palette[0]
                     else:
                         data = bs.get("data", [])
                         if data:
@@ -392,7 +392,14 @@ def _top_block_4x4(sections: list, ws_grid: list) -> dict:
                             idx   = y_loc * 256 + z_loc * 16 + x_loc
                             idxs  = _unpack_block_indices(data, len(palette))
                             pi    = idxs[idx] if idx < len(idxs) else 0
-                            block = palette[pi].get("Name", "minecraft:air") if pi < len(palette) else "minecraft:air"
+                            if pi < len(palette):
+                                block_state = palette[pi]
+            if isinstance(block_state, str):
+                block = block_state
+            elif isinstance(block_state, dict):
+                block = block_state.get("id", block_state.get("Name", "minecraft:air"))
+            else:
+                block = "minecraft:air"
             result[(x4, z4)] = block
     return result
 
