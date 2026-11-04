@@ -24,6 +24,8 @@ El exportador lee `map_base.png` y `tile_index.json.gz`. Si el backend corre en 
 3. Arranca el servidor o vuelve a abrir el mundo. En el Overworld, mira hacia una zona despejada y pulsa **G → Open map**. También puedes usar `/trigger vm_open set 1`. Si otro datapack usa G, elige primero **World map**.
 4. Para actualizar el terreno, genera los packs de nuevo, reemplaza ambos paquetes de VanillaOnlineMapMC de la misma exportación y vuelve a abrir el mundo. Los puntos se conservan.
 
+Si ves un cuadro morado y negro, verifica que `vanilla-map-resources.zip` figure entre los packs activos del cliente. Si el ZIP se generó con la primera versión del exportador, vuelve a generarlo desde esta rama con el mismo render y sustituye el *resource pack*. Para esa corrección basta con actualizar ese ZIP. Cierra y vuelve a abrir el mapa tras aplicar el pack.
+
 ## Controles
 
 | Control | Acción |

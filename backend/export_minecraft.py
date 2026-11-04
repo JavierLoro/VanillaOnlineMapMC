@@ -148,18 +148,19 @@ def build_packs(render_dir, checkout, output):
                     ))
                     draw_toolbar(frame, grid)
                     key = f"view/{zoom}/{column}/{row}"
+                    texture = f"item/{key}"
                     png = BytesIO()
                     frame.save(png, format="PNG", optimize=True)
-                    pack.writestr(f"assets/vanilla_map/textures/{key}.png", png.getvalue())
+                    pack.writestr(f"assets/vanilla_map/textures/{texture}.png", png.getvalue())
                     json_file(pack, f"assets/vanilla_map/items/{key}.json", {"model": {
                         "type": "minecraft:model", "model": f"vanilla_map:{key}"
                     }})
                     faces = {"south": {"uv": [0, 0, 16, 16], "texture": "#map"},
                              "north": {"uv": [16, 0, 0, 16], "texture": "#map"}}
                     json_file(pack, f"assets/vanilla_map/models/{key}.json", {
-                        "ambientocclusion": False, "textures": {"map": f"vanilla_map:{key}"},
+                        "ambientocclusion": False, "textures": {"map": f"vanilla_map:{texture}"},
                         "elements": [{"from": [0, 0, 8], "to": [16, 16, 8], "faces": faces,
-                                      "shade": False}]
+                                      "shade_direction_override": "up"}]
                     })
 
     atlas = {"x": origin[0], "z": origin[1], "width": padded_width * 4,
