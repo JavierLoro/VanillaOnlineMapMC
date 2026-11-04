@@ -19,6 +19,7 @@ COLUMNS = 6
 SECTOR_ROWS = 3
 TILE_WIDTH = 48
 LINE_HEIGHT = 9
+TEXT_PADDING = 4
 LINES_PER_SECTOR = 6
 LINES = SECTOR_ROWS * LINES_PER_SECTOR
 MARKER_STEP = 6
@@ -91,12 +92,14 @@ def make_dialog(glyphs):
             contents.append({"text": glyphs[index], "click_event": trigger(sector)})
     refresh = trigger(99)
     refresh["type"] = refresh.pop("action")
+    # The dialog widget reserves padding inside its declared width.
+    body_width = COLUMNS * (TILE_WIDTH + 1) + 2 * TEXT_PADDING
     return {
         "type": "minecraft:multi_action",
         "title": [{"text": "World map"}, {"text": ""}, {"text": ""}],
         "pause": False,
         "after_action": "none",
-        "body": {"type": "minecraft:plain_message", "width": COLUMNS * (TILE_WIDTH + 1),
+        "body": {"type": "minecraft:plain_message", "width": body_width,
                  "contents": {"text": "", "font": f"{NAMESPACE}:map", "color": "white",
                               "shadow_color": 0, "extra": contents}},
         "actions": [{"label": "Refresh position", "width": 142, "action": refresh},
