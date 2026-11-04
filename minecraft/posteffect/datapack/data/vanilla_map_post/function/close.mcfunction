@@ -1,2 +1,2 @@
-posteffect remove @s vanilla_map_post:map
+function vanilla_map_post:clear_view
 tag @s remove vmp_open

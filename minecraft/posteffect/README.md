@@ -10,7 +10,7 @@ Con Python 3.11+ y Pillow instalados, ejecuta desde la raíz del repositorio cua
 python backend/export_posteffect_map.py --render-dir backend/map_images --output post-packs
 ```
 
-La carpeta de render debe contener `map_base.png` y `tile_index.json.gz` de la misma generación. El encuadre cubre 1024 bloques de alto por defecto. Usa `--view-height 512` para ver un recorte más cercano. Cambiar el encuadre o el terreno requiere regenerar el resource pack.
+La carpeta de render debe contener `map_base.png` y `tile_index.json.gz` de la misma generación. El encuadre inicial cubre 1024 bloques de alto por defecto. Usa `--view-height 512` para empezar con un recorte más cercano. Para cambiar la escala inicial o actualizar el terreno, regenera el resource pack.
 
 ## Instalar y probar
 
@@ -18,7 +18,8 @@ La carpeta de render debe contener `map_base.png` y `tile_index.json.gz` de la m
 2. Activa `vanilla-map-post-resources.zip` en el cliente o distribúyelo desde el servidor. Si usas `resource-pack-sha1`, actualízalo con el hash del ZIP.
 3. En primera persona y en el Overworld, ejecuta **`/trigger vmp_map`** para abrir el mapa. Repite el comando para cerrarlo.
 4. Camina en dirección norte y este y comprueba que la cruceta queda centrada en tu posición. Cambia el tamaño de la ventana para comprobar que el mapa cubre la vista y mantiene su proporción.
+5. Gira la rueda hacia arriba para acercar y hacia abajo para alejar. Con la configuración por defecto, los tres niveles muestran 512, 1024 y 2048 bloques de alto. Al reabrir el mapa vuelves al nivel intermedio.
 
 Un operador también puede probar el resource pack directamente con `/posteffect add @s vanilla_map_post:map` y quitarlo con `/posteffect remove @s vanilla_map_post:map`.
 
-El encuadre sigue la posición de la cámara. La prueba usa una escala fija y deja disponibles los controles normales de movimiento del jugador.
+El encuadre sigue la posición de la cámara. El datapack detecta el cambio de ranura de la barra rápida. La rueda conserva su efecto normal sobre el objeto seleccionado y las teclas numéricas también pueden cambiar el zoom.

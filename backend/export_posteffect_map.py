@@ -51,7 +51,7 @@ def build(render_dir, output, view_height):
     texture, origin, world_size = read_render(render_dir)
     png = BytesIO()
     texture.save(png, format="PNG", optimize=True)
-    effect = {"passes": [{
+    map_pass = {
         "vertex_shader": "minecraft:core/screenquad",
         "fragment_shader": f"{NAMESPACE}:post/map",
         "inputs": [{
@@ -59,16 +59,21 @@ def build(render_dir, output, view_height):
             "width": texture.width, "height": texture.height,
         }],
         "output": "minecraft:main",
-        "uniforms": {"MapConfig": [
-            {"name": "MapOrigin", "type": "ivec3", "value": origin},
-            {"name": "ViewHeight", "type": "float", "value": view_height},
-            {"name": "MapWorldSize", "type": "vec2", "value": world_size},
-        ]},
-    }]}
+    }
     assets = f"assets/{NAMESPACE}"
     with ZipFile(output / "vanilla-map-post-resources.zip", "w", ZIP_DEFLATED) as pack:
         write_metadata(pack, [97, 1], "VanillaOnlineMapMC fullscreen map effect")
-        pack.writestr(f"{assets}/post_effect/map.json", json.dumps(effect))
+        for name, span in (
+            ("map_far", view_height * 2),
+            ("map", view_height),
+            ("map_near", view_height / 2),
+        ):
+            effect = {"passes": [dict(map_pass, uniforms={"MapConfig": [
+                {"name": "MapOrigin", "type": "ivec3", "value": origin},
+                {"name": "ViewHeight", "type": "float", "value": span},
+                {"name": "MapWorldSize", "type": "vec2", "value": world_size},
+            ]})]}
+            pack.writestr(f"{assets}/post_effect/{name}.json", json.dumps(effect))
         pack.writestr(f"{assets}/textures/effect/map.png", png.getvalue())
         pack.write(PACK_ROOT / "map.fsh", f"{assets}/shaders/post/map.fsh")
 
@@ -84,7 +89,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--render-dir", type=Path, default=ROOT / "backend" / "map_images")
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--view-height", type=int, default=1024, help="Vertical map span in blocks")
+    parser.add_argument("--view-height", type=int, default=1024, help="Initial vertical map span in blocks")
     args = parser.parse_args()
     if not 1 <= args.view_height <= 60_000_000:
         parser.error("--view-height must be between 1 and 60000000 blocks")
