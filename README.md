@@ -55,6 +55,8 @@ Interactive biome and terrain map viewer for Minecraft Java Edition worlds. Read
 - Port 8200 free (configurable)
 - Minecraft Java Edition **1.18+** (see [version support](#minecraft-version-support))
 
+The optional in-game dialog prototype targets **Minecraft Java 26.3**. [Build and test the dialog packs](minecraft/dialog/README.md).
+
 ---
 
 ## Quick start (systemd)

@@ -1,0 +1,10 @@
+{
+  "type": "minecraft:notice",
+  "title": "World map",
+  "pause": false,
+  "after_action": "none",
+  "action": {
+    "label": "Open map",
+    "action": {"type": "run_command", "command": "trigger vmd_action set 99"}
+  }
+}
