@@ -21,6 +21,12 @@ Interactive biome and terrain map viewer for Minecraft Java Edition worlds. Read
 
 ---
 
+## In-game map for Java 26.3
+
+Build and install the optional Floating UI map from the existing web render. [Setup and controls](minecraft/README.md).
+
+---
+
 ## Architecture
 
 ```

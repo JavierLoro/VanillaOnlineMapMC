@@ -1,0 +1,1 @@
+{"type":"minecraft:notice","title":"World map","external_title":"World map","action":{"label":"Open map","action":{"type":"minecraft:run_command","command":"trigger vm_open set 1"}}}

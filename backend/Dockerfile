@@ -4,7 +4,7 @@ WORKDIR /app
 
 COPY main.py .
 
-RUN pip install --no-cache-dir fastapi uvicorn[standard]
+RUN pip install --no-cache-dir fastapi uvicorn[standard] pillow
 
 EXPOSE 8200
 
