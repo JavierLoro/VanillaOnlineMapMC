@@ -55,6 +55,8 @@ Interactive biome and terrain map viewer for Minecraft Java Edition worlds. Read
 - Port 8200 free (configurable)
 - Minecraft Java Edition **1.18+** (see [version support](#minecraft-version-support))
 
+The optional fullscreen map prototype uses post-processing effects in **Minecraft Java 26.3**. [Build and test the map packs](minecraft/posteffect/README.md).
+
 ---
 
 ## Quick start (systemd)
