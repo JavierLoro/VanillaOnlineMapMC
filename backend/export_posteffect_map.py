@@ -15,6 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 PACK_ROOT = ROOT / "minecraft" / "posteffect"
 NAMESPACE = "vanilla_map_post"
 TEXTURE_LIMIT = 2048
+PAN_CENTER = 127
 
 
 def read_render(render_dir):
@@ -54,10 +55,22 @@ def build(render_dir, output, view_height):
     map_pass = {
         "vertex_shader": "minecraft:core/screenquad",
         "fragment_shader": f"{NAMESPACE}:post/map",
-        "inputs": [{
-            "sampler_name": "Map", "location": f"{NAMESPACE}:map",
-            "width": texture.width, "height": texture.height,
-        }],
+        "inputs": [
+            {"sampler_name": "Main", "target": "minecraft:main"},
+            {
+                "sampler_name": "Map", "location": f"{NAMESPACE}:map",
+                "width": texture.width, "height": texture.height,
+            },
+        ],
+        "output": "swap",
+    }
+    blit_pass = {
+        "vertex_shader": "minecraft:core/screenquad",
+        "fragment_shader": "minecraft:post/blit",
+        "inputs": [{"sampler_name": "In", "target": "swap"}],
+        "uniforms": {"BlitConfig": [
+            {"name": "ColorModulate", "type": "vec4", "value": [1, 1, 1, 1]},
+        ]},
         "output": "minecraft:main",
     }
     assets = f"assets/{NAMESPACE}"
@@ -68,14 +81,30 @@ def build(render_dir, output, view_height):
             ("map", view_height),
             ("map_near", view_height / 2),
         ):
-            effect = {"passes": [dict(map_pass, uniforms={"MapConfig": [
+            render = dict(map_pass, uniforms={"MapConfig": [
                 {"name": "MapOrigin", "type": "ivec3", "value": origin},
                 {"name": "ViewHeight", "type": "float", "value": span},
                 {"name": "MapWorldSize", "type": "vec2", "value": world_size},
-            ]})]}
+                {"name": "PanStep", "type": "float", "value": view_height / 128},
+            ]})
+            effect = {"targets": {"swap": {}}, "passes": [render, blit_pass]}
             pack.writestr(f"{assets}/post_effect/{name}.json", json.dumps(effect))
+
+        for pixel, axis in enumerate(("x", "z")):
+            for value in range(2 * PAN_CENTER + 1):
+                signal = {"passes": [{
+                    "vertex_shader": f"{NAMESPACE}:post/pan_signal",
+                    "fragment_shader": f"{NAMESPACE}:post/pan_signal",
+                    "output": "minecraft:main",
+                    "uniforms": {"PanSignal": [
+                        {"name": "Signal", "type": "vec2", "value": [pixel, value]},
+                    ]},
+                }]}
+                pack.writestr(f"{assets}/post_effect/pan/{axis}_{value}.json", json.dumps(signal))
+
         pack.writestr(f"{assets}/textures/effect/map.png", png.getvalue())
-        pack.write(PACK_ROOT / "map.fsh", f"{assets}/shaders/post/map.fsh")
+        for shader in ("map.fsh", "pan_signal.vsh", "pan_signal.fsh"):
+            pack.write(PACK_ROOT / shader, f"{assets}/shaders/post/{shader}")
 
     datapack = PACK_ROOT / "datapack"
     with ZipFile(output / "vanilla-map-post-datapack.zip", "w", ZIP_DEFLATED) as pack:

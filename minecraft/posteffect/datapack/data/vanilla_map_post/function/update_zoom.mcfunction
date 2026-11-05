@@ -10,8 +10,4 @@ execute if score @s vmp_scroll matches 1.. if score @s vmp_zoom matches 2 run re
 execute if score @s vmp_scroll matches ..-1 if score @s vmp_zoom matches 0 run return 0
 execute if score @s vmp_scroll matches 1.. run scoreboard players add @s vmp_zoom 1
 execute if score @s vmp_scroll matches ..-1 run scoreboard players remove @s vmp_zoom 1
-
-function vanilla_map_post:clear_view
-execute if score @s vmp_zoom matches 0 run posteffect add @s vanilla_map_post:map_far
-execute if score @s vmp_zoom matches 1 run posteffect add @s vanilla_map_post:map
-execute if score @s vmp_zoom matches 2 run posteffect add @s vanilla_map_post:map_near
+return 1

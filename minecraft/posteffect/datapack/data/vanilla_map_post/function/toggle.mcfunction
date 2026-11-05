@@ -4,5 +4,12 @@ scoreboard players add @s vmp_leaves 0
 scoreboard players operation @s vmp_session = @s vmp_leaves
 execute store result score @s vmp_slot run data get entity @s SelectedItemSlot
 scoreboard players set @s vmp_zoom 1
+execute store result score @s vmp_yaw run data get entity @s Rotation[0] 100
+execute store result score @s vmp_pitch run data get entity @s Rotation[1] 100
+scoreboard players set @s vmp_x 12700
+scoreboard players set @s vmp_z 12700
+scoreboard players set @s vmp_sent_x 127
+scoreboard players set @s vmp_sent_z 127
+function vanilla_map_post:set_pan_effects {operation:"add"}
 posteffect add @s vanilla_map_post:map
 tag @s add vmp_open

@@ -1,6 +1,6 @@
 # Prueba del mapa a pantalla completa en Minecraft Java 26.3
 
-El efecto toma el mapa del visor web y lo centra en la cámara. En primera persona, la cruceta indica tu posición mientras caminas. El mapa mantiene su proporción cuando cambia el tamaño de la ventana y muestra un fondo oscuro donde termina el render. Minecraft dibuja la cruceta y el resto del HUD encima.
+El efecto toma el mapa del visor web y lo centra inicialmente en la cámara. Puedes desplazarte por el mapa con el ratón sin caminar. Un punto azul indica tu posición al apartar el mapa de la cruceta. Minecraft dibuja la cruceta y el resto del HUD encima.
 
 ## Generar los packs
 
@@ -17,9 +17,9 @@ La carpeta de render debe contener `map_base.png` y `tile_index.json.gz` de la m
 1. Pon `vanilla-map-post-datapack.zip` en `datapacks/` de un mundo de prueba y arráncalo.
 2. Activa `vanilla-map-post-resources.zip` en el cliente o distribúyelo desde el servidor. Si usas `resource-pack-sha1`, actualízalo con el hash del ZIP.
 3. En primera persona y en el Overworld, ejecuta **`/trigger vmp_map`** para abrir el mapa. Repite el comando para cerrarlo.
-4. Camina en dirección norte y este y comprueba que la cruceta queda centrada en tu posición. Cambia el tamaño de la ventana para comprobar que el mapa cubre la vista y mantiene su proporción.
-5. Gira la rueda hacia arriba para acercar y hacia abajo para alejar. Con la configuración por defecto, los tres niveles muestran 512, 1024 y 2048 bloques de alto. Al reabrir el mapa vuelves al nivel intermedio.
+4. Sin caminar, mueve el ratón en horizontal y vertical. Comprueba que aparece el punto azul y que la vista vuelve a centrarse en tu posición al cerrar y abrir el mapa.
+5. Gira la rueda hacia arriba para acercar y hacia abajo para alejar. Con la configuración por defecto, los tres niveles muestran 512, 1024 y 2048 bloques de alto. El zoom mantiene el centro de la vista y al reabrir el mapa vuelve al nivel intermedio.
 
 Un operador también puede probar el resource pack directamente con `/posteffect add @s vanilla_map_post:map` y quitarlo con `/posteffect remove @s vanilla_map_post:map`.
 
-El encuadre sigue la posición de la cámara. El datapack detecta el cambio de ranura de la barra rápida. La rueda conserva su efecto normal sobre el objeto seleccionado y las teclas numéricas también pueden cambiar el zoom.
+El desplazamiento se actualiza con los ticks del servidor y en esta prueba está limitado a aproximadamente 1 000 bloques por eje con la escala inicial por defecto. Girar el ratón también cambia la dirección del personaje y el juego sigue permitiendo caminar. La rueda conserva su efecto normal sobre el objeto seleccionado y las teclas numéricas también pueden cambiar el zoom.
