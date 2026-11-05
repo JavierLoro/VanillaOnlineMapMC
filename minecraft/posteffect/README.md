@@ -16,7 +16,7 @@ La carpeta de render debe contener `map_base.png` y `tile_index.json.gz` de la m
 
 1. Pon `vanilla-map-post-datapack.zip` en `datapacks/` de un mundo de prueba y arráncalo.
 2. Activa `vanilla-map-post-resources.zip` en el cliente o distribúyelo desde el servidor. Si usas `resource-pack-sha1`, actualízalo con el hash del ZIP.
-3. En primera persona y en el Overworld, ejecuta **`/trigger vmp_map`** para abrir el mapa. Repite el comando para cerrarlo.
+3. En primera persona y en el Overworld, ejecuta **`/trigger vmp_map`** para abrir el mapa. Ciérralo con **Mayús** (la tecla que tengas asignada a agacharte) o repite el comando.
 4. Sin caminar, mueve el ratón en horizontal y vertical. Comprueba que aparece el punto azul y que la vista vuelve a centrarse en tu posición al cerrar y abrir el mapa.
 5. Gira la rueda hacia arriba para acercar y hacia abajo para alejar. Con la configuración por defecto, los tres niveles muestran 512, 1024 y 2048 bloques de alto. El zoom mantiene el centro de la vista y al reabrir el mapa vuelve al nivel intermedio.
 
