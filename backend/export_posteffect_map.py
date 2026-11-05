@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 PACK_ROOT = ROOT / "minecraft" / "posteffect"
 NAMESPACE = "vanilla_map_post"
 TEXTURE_LIMIT = 2048
-PAN_CENTER = 127
+PAN_CENTER = 32767
 
 
 def read_render(render_dir):
@@ -50,13 +50,15 @@ def write_metadata(pack, version, description):
 
 def build(render_dir, output, view_height):
     texture, origin, world_size = read_render(render_dir)
+    pan_step = max(world_size) / PAN_CENTER
+    pan_sensitivity = max(1, min(32767, round(view_height / (128 * pan_step))))
     png = BytesIO()
     texture.save(png, format="PNG", optimize=True)
     map_pass = {
         "vertex_shader": "minecraft:core/screenquad",
         "fragment_shader": f"{NAMESPACE}:post/map",
         "inputs": [
-            {"sampler_name": "Main", "target": "minecraft:main"},
+            {"sampler_name": "State", "target": "next_state"},
             {
                 "sampler_name": "Map", "location": f"{NAMESPACE}:map",
                 "width": texture.width, "height": texture.height,
@@ -74,6 +76,16 @@ def build(render_dir, output, view_height):
         "output": "minecraft:main",
     }
     assets = f"assets/{NAMESPACE}"
+    state_pass = {
+        "vertex_shader": "minecraft:core/screenquad",
+        "fragment_shader": f"{NAMESPACE}:post/navigation",
+        "inputs": [
+            {"sampler_name": "Main", "target": "minecraft:main"},
+            {"sampler_name": "Previous", "target": "history"},
+        ],
+        "output": "next_state",
+    }
+    save_state = dict(blit_pass, inputs=[{"sampler_name": "In", "target": "next_state"}], output="history")
     with ZipFile(output / "vanilla-map-post-resources.zip", "w", ZIP_DEFLATED) as pack:
         write_metadata(pack, [97, 1], "VanillaOnlineMapMC fullscreen map effect")
         for name, span in (
@@ -85,13 +97,20 @@ def build(render_dir, output, view_height):
                 {"name": "MapOrigin", "type": "ivec3", "value": origin},
                 {"name": "ViewHeight", "type": "float", "value": span},
                 {"name": "MapWorldSize", "type": "vec2", "value": world_size},
-                {"name": "PanStep", "type": "float", "value": view_height / 128},
+                {"name": "PanStep", "type": "float", "value": pan_step},
             ]})
-            effect = {"targets": {"swap": {}}, "passes": [render, blit_pass]}
+            effect = {
+                "targets": {
+                    "swap": {},
+                    "history": {"width": 2, "height": 1, "persistent": True},
+                    "next_state": {"width": 2, "height": 1},
+                },
+                "passes": [state_pass, render, blit_pass, save_state],
+            }
             pack.writestr(f"{assets}/post_effect/{name}.json", json.dumps(effect))
 
-        for pixel, axis in enumerate(("x", "z")):
-            for value in range(2 * PAN_CENTER + 1):
+        for pixel in range(8):
+            for value in range(16):
                 signal = {"passes": [{
                     "vertex_shader": f"{NAMESPACE}:post/pan_signal",
                     "fragment_shader": f"{NAMESPACE}:post/pan_signal",
@@ -100,10 +119,10 @@ def build(render_dir, output, view_height):
                         {"name": "Signal", "type": "vec2", "value": [pixel, value]},
                     ]},
                 }]}
-                pack.writestr(f"{assets}/post_effect/pan/{axis}_{value}.json", json.dumps(signal))
+                pack.writestr(f"{assets}/post_effect/pan/{pixel}_{value}.json", json.dumps(signal))
 
         pack.writestr(f"{assets}/textures/effect/map.png", png.getvalue())
-        for shader in ("map.fsh", "pan_signal.vsh", "pan_signal.fsh"):
+        for shader in ("map.fsh", "navigation.fsh", "pan_signal.vsh", "pan_signal.fsh"):
             pack.write(PACK_ROOT / shader, f"{assets}/shaders/post/{shader}")
 
     datapack = PACK_ROOT / "datapack"
@@ -112,6 +131,10 @@ def build(render_dir, output, view_height):
         for file in sorted(datapack.rglob("*")):
             if file.is_file():
                 pack.write(file, file.relative_to(datapack).as_posix())
+        pack.writestr(
+            f"data/{NAMESPACE}/function/pan_config.mcfunction",
+            f"scoreboard players set #sensitivity vmp_pan {pan_sensitivity}\n",
+        )
 
 
 def main():

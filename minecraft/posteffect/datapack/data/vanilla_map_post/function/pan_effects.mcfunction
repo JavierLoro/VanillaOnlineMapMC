@@ -1,2 +1,11 @@
-$posteffect $(operation) @s vanilla_map_post:pan/x_$(x)
-$posteffect $(operation) @s vanilla_map_post:pan/z_$(z)
+# Clean up pixel writers from the earlier 8-bit packs on reload.
+$posteffect remove @s vanilla_map_post:pan/x_$(x)
+$posteffect remove @s vanilla_map_post:pan/z_$(z)
+$posteffect $(operation) @s vanilla_map_post:pan/0_$(d0)
+$posteffect $(operation) @s vanilla_map_post:pan/1_$(d1)
+$posteffect $(operation) @s vanilla_map_post:pan/2_$(d2)
+$posteffect $(operation) @s vanilla_map_post:pan/3_$(d3)
+$posteffect $(operation) @s vanilla_map_post:pan/4_$(d4)
+$posteffect $(operation) @s vanilla_map_post:pan/5_$(d5)
+$posteffect $(operation) @s vanilla_map_post:pan/6_$(d6)
+$posteffect $(operation) @s vanilla_map_post:pan/7_$(d7)

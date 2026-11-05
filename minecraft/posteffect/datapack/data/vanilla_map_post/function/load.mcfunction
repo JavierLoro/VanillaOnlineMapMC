@@ -13,5 +13,9 @@ scoreboard objectives add vmp_x dummy
 scoreboard objectives add vmp_z dummy
 scoreboard objectives add vmp_sent_x dummy
 scoreboard objectives add vmp_sent_z dummy
+scoreboard objectives add vmp_word dummy
+scoreboard objectives add vmp_digit dummy
 scoreboard players set #pan_step vmp_pan 100
+scoreboard players set #radix vmp_pan 16
 execute as @a[tag=vmp_open] run function vanilla_map_post:close
+function vanilla_map_post:pan_config
