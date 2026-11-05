@@ -91,9 +91,9 @@ def build(render_dir, output, view_height):
     with ZipFile(output / "vanilla-map-post-resources.zip", "w", ZIP_DEFLATED) as pack:
         write_metadata(pack, [97, 1], "VanillaOnlineMapMC fullscreen map effect")
         for name, span in (
-            ("map_far", view_height * 2),
-            ("map", view_height),
-            ("map_near", view_height / 2),
+            ("map_far", view_height * 4),
+            ("map", view_height * 2),
+            ("map_near", view_height),
         ):
             render = dict(map_pass, uniforms={"MapConfig": [
                 {"name": "MapOrigin", "type": "ivec3", "value": origin},
@@ -162,7 +162,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--render-dir", type=Path, default=ROOT / "backend" / "map_images")
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--view-height", type=int, default=1024, help="Initial vertical map span in blocks")
+    parser.add_argument("--view-height", type=int, default=1024, help="Initial and minimum vertical map span in blocks")
     args = parser.parse_args()
     if not 1 <= args.view_height <= 60_000_000:
         parser.error("--view-height must be between 1 and 60000000 blocks")

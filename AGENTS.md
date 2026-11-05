@@ -25,7 +25,7 @@ La rama activa para esta prueba es `feature/posteffect-world-map`. La integraci�
 - La plataforma de la prueba es Minecraft Java 26.3, con datapack y resource pack.
 - La vista ocupa la pantalla, mantiene la cruceta y conserva visible la interfaz habitual, incluida la barra rápida.
 - `/trigger vmp_map` abre o cierra el mapa. La acción de agacharse, Mayús por defecto, también lo cierra. Si se abre con esa acción ya pulsada, el atajo se activa después de soltarla.
-- El ratón desplaza el mapa. La rueda cambia entre tres escalas. El cambio de ranura de la barra rápida sigue ocurriendo y las teclas numéricas pueden cambiar el zoom.
+- El ratón desplaza el mapa. La rueda cambia entre tres escalas: 1024, 2048 y 4096 bloques de alto por defecto. El mapa abre en 1024, su máximo acercamiento; solo permite alejarse desde esa vista. `--view-height` configura ese encuadre mínimo. El cambio de ranura de la barra rápida sigue ocurriendo y las teclas numéricas pueden cambiar el zoom.
 - El punto azul muestra la posición del jugador al desplazar la vista. Girar el ratón también gira al personaje y las teclas de movimiento siguen disponibles.
 - El recorrido está calculado para cubrir la imagen exportada y detenerse en sus bordes. El shader suaviza las actualizaciones mediante un historial de dos píxeles.
 - El servidor proporciona la entrada mediante sus ticks. La respuesta depende también de la latencia de red y de la carga del servidor.
@@ -36,7 +36,7 @@ Las ramas `feature/floating-world-map` y `feature/dialog-world-map` conservan ex
 
 El usuario validó la pantalla completa, el zoom, el desplazamiento con el ratón y el cierre con Mayús en las versiones anteriores de esta prueba.
 
-La ampliación del recorrido, la mayor precisión y el suavizado se publicaron después de que el usuario indicara límites laterales y sensación de lag. Las pruebas locales de servidor cubrieron movimiento fino, recorrido superior al antiguo límite, bordes y cambio de dirección, zoom, vistas independientes y limpieza al cerrar. El formato del efecto y la compilación de los shaders se comprobaron con las bibliotecas de Minecraft 26.3. La fluidez visual de esta última revisión sigue pendiente de validación en el cliente del usuario.
+El usuario también validó el recorrido completo, la respuesta en los bordes y la fluidez el 5 de noviembre de 2026, cerrando la fase 2 del roadmap. Las pruebas locales de servidor cubrieron movimiento fino, recorrido superior al antiguo límite, bordes y cambio de dirección, zoom, vistas independientes y limpieza al cerrar. El formato del efecto y la compilación de los shaders se comprobaron con las bibliotecas de Minecraft 26.3. El ajuste posterior del zoom conserva la vista inicial de 1024 bloques como máximo acercamiento y ofrece 2048 y 4096 para alejarse; su validación visual queda pendiente.
 
 El clic derecho para recentrar y el clic izquierdo para seleccionar están pendientes de implementación. Los waypoints personales son una ampliación futura. La interfaz acordada conserva la barra rápida visible y los controles del mapa funcionan sin pulsar F1.
 

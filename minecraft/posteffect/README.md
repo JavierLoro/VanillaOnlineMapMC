@@ -10,7 +10,7 @@ Con Python 3.11+ y Pillow instalados, ejecuta desde la raíz del repositorio cua
 python backend/export_posteffect_map.py --render-dir backend/map_images --output post-packs
 ```
 
-La carpeta de render debe contener `map_base.png` y `tile_index.json.gz` de la misma generación. El encuadre inicial cubre 1024 bloques de alto por defecto. Usa `--view-height 512` para empezar con un recorte más cercano. Para cambiar la escala inicial o actualizar el terreno, regenera el resource pack.
+La carpeta de render debe contener `map_base.png` y `tile_index.json.gz` de la misma generación. El encuadre inicial cubre 1024 bloques de alto por defecto y es el máximo acercamiento. `--view-height` fija ese encuadre mínimo; los otros niveles muestran el doble y el cuádruple de terreno. Al cambiar las escalas o actualizar el terreno, regenera e instala ambos packs.
 
 ## Instalar y probar
 
@@ -18,9 +18,9 @@ La carpeta de render debe contener `map_base.png` y `tile_index.json.gz` de la m
 2. Activa `vanilla-map-post-resources.zip` en el cliente o distribúyelo desde el servidor. Si usas `resource-pack-sha1`, actualízalo con el hash del ZIP.
 3. En primera persona y en el Overworld, ejecuta **`/trigger vmp_map`** para abrir el mapa. Ciérralo con **Mayús** (la tecla que tengas asignada a agacharte) o repite el comando.
 4. Sin caminar, mueve el ratón en horizontal y vertical. Comprueba que aparece el punto azul y que la vista vuelve a centrarse en tu posición al cerrar y abrir el mapa.
-5. Gira la rueda hacia arriba para acercar y hacia abajo para alejar. Con la configuración por defecto, los tres niveles muestran 512, 1024 y 2048 bloques de alto. El zoom mantiene el centro de la vista y al reabrir el mapa vuelve al nivel intermedio.
+5. El mapa abre en el máximo acercamiento, con 1024 bloques de alto. Gira la rueda hacia abajo para ver 2048 y 4096 bloques, y hacia arriba para regresar hasta 1024. No permite acercarse más que la vista inicial. El zoom mantiene el centro de la vista y al reabrir el mapa vuelve a 1024.
 
-Un operador también puede probar el resource pack directamente con `/posteffect add @s vanilla_map_post:map` y quitarlo con `/posteffect remove @s vanilla_map_post:map`.
+Un operador también puede probar la vista inicial del resource pack directamente con `/posteffect add @s vanilla_map_post:map_near` y quitarla con `/posteffect remove @s vanilla_map_post:map_near`.
 
 El recorrido cubre toda la imagen exportada y se detiene en sus bordes. El datapack adapta el alcance y la sensibilidad al tamaño del mapa al generar los packs. Cada eje tiene hasta 65 535 posiciones disponibles; en un mapa de 8 192 bloques de lado, el paso transmitido es de aproximadamente un tercio de bloque.
 

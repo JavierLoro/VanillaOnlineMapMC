@@ -19,21 +19,23 @@ Las instrucciones para agentes están en [AGENTS.md](AGENTS.md). La generación 
 
 ## 2. Alcance, precisión y fluidez
 
-**Estado: implementado y publicado; pendiente de validación visual del usuario.**
+**Estado: validada por el usuario el 5 de noviembre de 2026.**
 
 - [x] Adaptar el alcance al tamaño de la imagen exportada.
 - [x] Transmitir posiciones con mayor precisión.
 - [x] Detener el recorrido en los bordes y responder al invertir el ratón.
 - [x] Suavizar visualmente los pasos entre actualizaciones del servidor.
 - [x] Comprobar en el servidor local recorrido, bordes, zoom, vistas independientes y cierre.
-- [ ] Validar en el cliente del usuario el recorrido completo, la respuesta en los bordes y la sensación de fluidez.
+- [x] Validar en el cliente del usuario el recorrido completo, la respuesta en los bordes y la sensación de fluidez.
 
 El servidor sigue proporcionando la entrada mediante sus ticks. La latencia de red y la carga del servidor forman parte de la comprobación de respuesta.
 
 ## 3. Completar los controles
 
-**Estado: siguiente desarrollo después de validar la fase 2.**
+**Estado: ajuste del rango de zoom implementado; pendiente de validación visual. Después, clic derecho para recentrar.**
 
+- [x] Conservar la vista inicial de 1024 bloques como máximo acercamiento y ofrecer 2048 y 4096 para alejarse.
+- [ ] Validar el rango nuevo, el centro al cambiar de escala y el regreso a 1024 al reabrir.
 - [ ] Clic derecho para volver a centrar el mapa en el jugador conservando el zoom.
 - [ ] Clic izquierdo para seleccionar un punto o chunk y consultar sus coordenadas.
 - [ ] Limpiar la selección al volver a pulsar sobre ella.
@@ -65,6 +67,6 @@ Diorama, BlueMap y los demás renderizadores investigados sirven como referencia
 
 ## Próxima comprobación
 
-Regenerar e instalar ambos packs de la revisión actual y validar la fase 2 dentro del juego. Después, implementar el clic derecho para recentrar.
+Regenerar e instalar ambos packs de la revisión actual y validar el nuevo rango de zoom dentro del juego. La fase 2 ya está validada. Después, implementar el clic derecho para recentrar.
 
 Mantener sincronizados este roadmap y el estado de validación de `AGENTS.md` cuando se implemente una función o el usuario confirme una prueba.
