@@ -29,7 +29,8 @@ void main() {
     vec2 camera = vec2(CameraBlockPos.xz - MapOrigin.xz) - CameraOffset.xz;
     vec4 state = round(texelFetch(StateSampler, ivec2(0), 0) * 255.0);
     vec2 pan = (vec2(state.r * 256.0 + state.g, state.b * 256.0 + state.a) - 32767.0) * PanStep;
-    vec2 center = clamp(camera + pan, vec2(0.0), MapWorldSize);
+    vec2 anchor = clamp(camera, vec2(0.0), MapWorldSize);
+    vec2 center = clamp(anchor + pan, vec2(0.0), MapWorldSize);
     vec2 playerOffset = center - camera + screenOffset * viewSize;
     vec2 uv = (camera + playerOffset) / MapWorldSize;
     vec3 background = vec3(29.0, 39.0, 48.0) / 255.0;

@@ -3,6 +3,7 @@
 import argparse
 import gzip
 import json
+import math
 from io import BytesIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -50,7 +51,8 @@ def write_metadata(pack, version, description):
 
 def build(render_dir, output, view_height):
     texture, origin, world_size = read_render(render_dir)
-    pan_step = max(world_size) / PAN_CENTER
+    pan_units = max(1, math.ceil(max(world_size) * 16 / PAN_CENTER))
+    pan_step = pan_units / 16
     pan_sensitivity = max(1, min(32767, round(view_height / (128 * pan_step))))
     png = BytesIO()
     texture.save(png, format="PNG", optimize=True)
@@ -133,8 +135,27 @@ def build(render_dir, output, view_height):
                 pack.write(file, file.relative_to(datapack).as_posix())
         pack.writestr(
             f"data/{NAMESPACE}/function/pan_config.mcfunction",
-            f"scoreboard players set #sensitivity vmp_pan {pan_sensitivity}\n",
+            f"scoreboard players set #sensitivity vmp_pan {pan_sensitivity}\n"
+            f"scoreboard players set #pan_units vmp_pan {pan_units}\n",
         )
+        limits = []
+        for index, axis in ((0, "x"), (2, "z")):
+            extent = world_size[index // 2] * 16
+            shift_operation = "remove" if origin[index] >= 0 else "add"
+            limits.extend([
+                f"execute store result score @s vmp_word run data get entity @s Pos[{index}] 16",
+                f"scoreboard players {shift_operation} @s vmp_word {abs(origin[index] * 16)}",
+                "execute if score @s vmp_word matches ..-1 run scoreboard players set @s vmp_word 0",
+                f"execute if score @s vmp_word matches {extent + 1}.. run scoreboard players set @s vmp_word {extent}",
+                "scoreboard players operation @s vmp_word /= #pan_units vmp_pan",
+                "scoreboard players operation @s vmp_word *= #pan_step vmp_pan",
+                f"scoreboard players set @s vmp_digit {PAN_CENTER * 100}",
+                "scoreboard players operation @s vmp_digit -= @s vmp_word",
+                f"execute if score @s vmp_{axis} < @s vmp_digit run scoreboard players operation @s vmp_{axis} = @s vmp_digit",
+                f"scoreboard players add @s vmp_digit {math.ceil(extent / pan_units) * 100}",
+                f"execute if score @s vmp_{axis} > @s vmp_digit run scoreboard players operation @s vmp_{axis} = @s vmp_digit",
+            ])
+        pack.writestr(f"data/{NAMESPACE}/function/limit_pan.mcfunction", "\n".join(limits) + "\n")
 
 
 def main():

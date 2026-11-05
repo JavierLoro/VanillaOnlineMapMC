@@ -12,10 +12,7 @@ scoreboard players operation @s vmp_dx *= #sensitivity vmp_pan
 scoreboard players operation @s vmp_dz *= #sensitivity vmp_pan
 scoreboard players operation @s vmp_x += @s vmp_dx
 scoreboard players operation @s vmp_z += @s vmp_dz
-execute if score @s vmp_x matches ..-1 run scoreboard players set @s vmp_x 0
-execute if score @s vmp_x matches 6553401.. run scoreboard players set @s vmp_x 6553400
-execute if score @s vmp_z matches ..-1 run scoreboard players set @s vmp_z 0
-execute if score @s vmp_z matches 6553401.. run scoreboard players set @s vmp_z 6553400
+function vanilla_map_post:limit_pan
 
 # Reset pitch near its limits so vertical panning can continue.
 execute if score @s vmp_pitch matches ..-8500 run function vanilla_map_post:reset_pitch
