@@ -1,6 +1,6 @@
 # Roadmap del mapa dentro de Minecraft
 
-Actualizado el 5 de noviembre de 2026. Rama de trabajo: `feature/posteffect-world-map`.
+Actualizado el 6 de noviembre de 2026. Rama de trabajo: `feature/posteffect-world-map`.
 
 El objetivo es un mapa a pantalla completa para clientes vanilla de Minecraft Java 26.3, distribuido mediante datapack y resource pack, con posición del jugador, navegación, zoom y puntos personales. La barra rápida y la interfaz habitual permanecen visibles.
 
@@ -52,7 +52,18 @@ El servidor sigue proporcionando la entrada mediante sus ticks. La latencia de r
 - [ ] Mostrar a cada jugador sus propios marcadores.
 - [ ] Validar el aislamiento entre jugadores.
 
-## 5. Detalle por bloque y vista inclinada
+## 5. Relieve cenital
+
+**Estado: implementado; pendiente de validación visual en el cliente del usuario.**
+
+- [x] Combinar colores de bioma con sombreado suave de altura y pendientes del visor web.
+- [x] Suavizar el sombreado fino de las copas y conservar las coordenadas y la transparencia.
+- [x] Generar una sola textura sin añadir trabajo por fotograma ni cambiar zoom o controles.
+- [x] Mantener `--style biomes` para comparar con la vista plana.
+- [x] Comprobar capas incoherentes y verificar que solo cambia la textura de los packs.
+- [ ] Validar dentro del juego legibilidad, sensación de relieve y alineación del marcador en las tres escalas.
+
+## 6. Detalle por bloque y vista inclinada
 
 **Estado: investigación y prueba propuesta.**
 
@@ -67,6 +78,6 @@ Diorama, BlueMap y los demás renderizadores investigados sirven como referencia
 
 ## Próxima comprobación
 
-Regenerar e instalar ambos packs de la revisión actual y validar el nuevo rango de zoom dentro del juego. La fase 2 ya está validada. Después, implementar el clic derecho para recentrar.
+Regenerar e instalar ambos packs con relieve cenital y validarlo dentro del juego junto con el rango 1024/2048/4096. La fase 2 ya está validada. Después, implementar el clic derecho para recentrar.
 
 Mantener sincronizados este roadmap y el estado de validación de `AGENTS.md` cuando se implemente una función o el usuario confirme una prueba.

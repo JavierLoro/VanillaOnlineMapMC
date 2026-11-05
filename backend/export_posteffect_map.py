@@ -9,7 +9,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from zipfile import ZIP_DEFLATED, ZipFile
 
-from PIL import Image
+from PIL import Image, ImageChops, ImageFilter
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -17,15 +17,26 @@ PACK_ROOT = ROOT / "minecraft" / "posteffect"
 NAMESPACE = "vanilla_map_post"
 TEXTURE_LIMIT = 2048
 PAN_CENTER = 32767
+RELIEF_LAYERS = (("shade", 0.25), ("hillshade", 0.45))
 
 
-def read_render(render_dir):
+def read_render(render_dir, style="relief"):
+    if style not in {"relief", "biomes"}:
+        raise ValueError(f"Unknown map style: {style}")
     png_path = render_dir / "map_base.png"
     index_path = render_dir / "tile_index.json.gz"
-    files = (png_path, index_path)
+    layers = tuple((render_dir / f"map_{name}.png", strength)
+                   for name, strength in RELIEF_LAYERS) if style == "relief" else ()
+    for path, _ in layers:
+        if not path.is_file():
+            raise ValueError(f"Relief requires {path.name} from the same web render; "
+                             "regenerate the render or use --style biomes.")
+    files = (png_path, *(path for path, _ in layers), index_path)
     timestamps = tuple(path.stat().st_mtime_ns for path in files)
-    if timestamps[1] < timestamps[0]:
-        raise ValueError("The tile index predates the map image. Export from a completed render.")
+    if timestamps[-1] < max(timestamps[:-1]) or any(
+        timestamp < timestamps[0] for timestamp in timestamps[1:-1]
+    ):
+        raise ValueError("Map layers and tile index must come from the same completed render.")
 
     with gzip.open(index_path, "rt", encoding="utf-8") as index:
         bounds = json.load(index)["bounds"]
@@ -36,6 +47,24 @@ def read_render(render_dir):
         if image.size != (width, height):
             raise ValueError("The map image and tile index bounds do not match.")
         texture = image.convert("RGBA")
+        alpha = texture.getchannel("A")
+        for path, strength in layers:
+            with Image.open(path) as layer:
+                if layer.size != texture.size:
+                    raise ValueError(f"{path.name} dimensions do not match the map image.")
+                overlay = layer.convert("RGBA")
+                if path.name == "map_hillshade.png":
+                    # Reduce canopy noise without shifting the terrain or its mask.
+                    softened = overlay.convert("RGB").filter(ImageFilter.GaussianBlur(1))
+                    softened.putalpha(overlay.getchannel("A"))
+                    overlay = softened
+                # Transparent overlay pixels must leave the biome color unchanged.
+                lighting = Image.new("RGBA", texture.size, "white")
+                lighting.alpha_composite(overlay)
+            lighting = Image.blend(Image.new("RGB", texture.size, "white"),
+                                   lighting.convert("RGB"), strength)
+            texture = ImageChops.multiply(texture.convert("RGB"), lighting).convert("RGBA")
+        texture.putalpha(alpha)
         texture.thumbnail((TEXTURE_LIMIT, TEXTURE_LIMIT), Image.Resampling.NEAREST)
 
     if timestamps != tuple(path.stat().st_mtime_ns for path in files):
@@ -49,8 +78,8 @@ def write_metadata(pack, version, description):
     }}))
 
 
-def build(render_dir, output, view_height):
-    texture, origin, world_size = read_render(render_dir)
+def build(render_dir, output, view_height, style="relief"):
+    texture, origin, world_size = read_render(render_dir, style)
     pan_units = max(1, math.ceil(max(world_size) * 16 / PAN_CENTER))
     pan_step = pan_units / 16
     pan_sensitivity = max(1, min(32767, round(view_height / (128 * pan_step))))
@@ -163,6 +192,8 @@ def main():
     parser.add_argument("--render-dir", type=Path, default=ROOT / "backend" / "map_images")
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--view-height", type=int, default=1024, help="Initial and minimum vertical map span in blocks")
+    parser.add_argument("--style", choices=("relief", "biomes"), default="relief",
+                        help="Terrain shading (default) or plain biome colors")
     args = parser.parse_args()
     if not 1 <= args.view_height <= 60_000_000:
         parser.error("--view-height must be between 1 and 60000000 blocks")
@@ -170,7 +201,7 @@ def main():
     args.output.mkdir(parents=True, exist_ok=True)
     with TemporaryDirectory(dir=args.output) as temporary:
         staging = Path(temporary)
-        build(args.render_dir, staging, args.view_height)
+        build(args.render_dir, staging, args.view_height, args.style)
         for pack in sorted(staging.glob("*.zip")):
             destination = args.output / pack.name
             pack.replace(destination)
