@@ -16,6 +16,7 @@ El visor web lee archivos de mundos Java y genera imágenes del terreno. El mapa
 - `backend/export_posteffect_map.py` genera los packs del mapa a pantalla completa.
 - `minecraft/posteffect/` contiene los shaders, las funciones del datapack y las instrucciones de instalación.
 - Consulta `README.md` para el visor web y `minecraft/posteffect/README.md` para generar y probar los packs.
+- Consulta `ROADMAP.md` para las fases, prioridades y pruebas pendientes del mapa dentro del juego. Mantén sincronizado su estado con este archivo cuando cambie una validación o se implemente una función.
 
 ## Desarrollo actual del mapa dentro del juego
 
