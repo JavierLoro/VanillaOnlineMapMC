@@ -84,14 +84,20 @@ def lifecycle(name, content):
     if name == "load.mcfunction":
         objectives = ["vmp_live", "vmp_lmode", "vmp_ltimer", "vmp_lindex", "vmp_lbank",
                       "vmp_lsent", "vmp_lgen", "vmp_lcx", "vmp_lcz", "vmp_lx", "vmp_lz",
-                      "vmp_lr", "vmp_lg", "vmp_lb", "vmp_lword", "vmp_la", "vmp_lsum"]
+                      "vmp_lr", "vmp_lg", "vmp_lb", "vmp_lword", "vmp_la", "vmp_lsum",
+                      "vmp_lid", "vmp_lresume", "vmp_lload", "vmp_lcache"]
         objectives += [f"vmp_lold{i}" for i in range(PACKET_BYTES)]
         prefix = "".join(f"scoreboard objectives add {obj} {'trigger' if obj == 'vmp_live' else 'dummy'}\n"
                          for obj in objectives)
         constants = {"#byte": 256, "#sum": 255, "#chunk": 16, "#two": 2, "#one": 1,
                      "#hold": HOLD_TICKS, "#four": 4}
         prefix += "".join(f"scoreboard players set {key} vmp_lword {value}\n" for key, value in constants.items())
+        prefix += "scoreboard players add #next_id vmp_lid 0\n"
         return prefix + content
+    if name == "toggle.mcfunction":
+        return content + (
+            "\nexecute unless score @s vmp_lresume matches 0..1 if score @s vmp_lmode matches 1..2 run scoreboard players set @s vmp_lresume 1\n"
+            "execute if score @s vmp_lresume matches 1 run function vanilla_map_post:live/resume\n")
     if name == "close.mcfunction":
         return "execute if entity @s[tag=vmp_live] run function vanilla_map_post:live/stop\n" + content
     if name == "tick.mcfunction":
@@ -112,7 +118,7 @@ def datapack(pack, namespace):
         pack.writestr(prefix + name + ".mcfunction", lines)
 
     function("trigger", [
-        "execute if score @s vmp_live matches 3.. run return run function vanilla_map_post:live/stop",
+        "execute if score @s vmp_live matches 3.. run return run function vanilla_map_post:live/disable",
         'execute unless entity @s[tag=vmp_open] run return run tellraw @s {"text":"Open the map first.","color":"yellow"}',
         "execute if entity @s[tag=vmp_live] run function vanilla_map_post:live/stop",
         "scoreboard players operation @s vmp_lmode = @s vmp_live",
@@ -122,6 +128,12 @@ def datapack(pack, namespace):
         'execute unless score @s vmp_lcz matches -32768..32767 run return run tellraw @s {"text":"Outside the probe coordinate range.","color":"red"}',
         "scoreboard players add @s vmp_lgen 1",
         "scoreboard players operation @s vmp_lgen %= #byte vmp_lword",
+        "function vanilla_map_post:live/cache/context",
+        "function vanilla_map_post:live/cache/create with storage vanilla_map_post:live context",
+        "scoreboard players set @s vmp_lresume 1",
+        "function vanilla_map_post:live/start",
+    ])
+    function("start", [
         "scoreboard players set @s vmp_lindex 0",
         "scoreboard players set @s vmp_lbank 0",
         "scoreboard players set @s vmp_lsent 0",
@@ -130,6 +142,48 @@ def datapack(pack, namespace):
         "posteffect add @s vanilla_map_post:live/bank0",
         "posteffect add @s vanilla_map_post:live/bank1",
         "function vanilla_map_post:live/next",
+    ])
+    function("disable", [
+        "scoreboard players set @s vmp_lresume 0",
+        "function vanilla_map_post:live/stop",
+    ])
+    function("resume", [
+        "function vanilla_map_post:live/cache/context",
+        "function vanilla_map_post:live/cache/ensure with storage vanilla_map_post:live context",
+        "function vanilla_map_post:live/cache/restore with storage vanilla_map_post:live context",
+        "function vanilla_map_post:live/start",
+    ])
+    function("cache/context", [
+        "execute unless score @s vmp_lid matches 1.. run function vanilla_map_post:live/cache/assign_id",
+        *(f"execute store result storage vanilla_map_post:live context.{key} int 1 run scoreboard players get @s {score}"
+          for key, score in (("id", "vmp_lid"), ("index", "vmp_lindex"), ("cx", "vmp_lcx"),
+                             ("cz", "vmp_lcz"), ("mode", "vmp_lmode"), ("revision", "vmp_lgen"))),
+    ])
+    function("cache/assign_id", [
+        "scoreboard players add #next_id vmp_lid 1",
+        "scoreboard players operation @s vmp_lid = #next_id vmp_lid",
+    ])
+    function("cache/create", [
+        "$data modify storage vanilla_map_post:live_cache players.p$(id) set value {version:1,cx:$(cx),cz:$(cz),mode:$(mode),revision:$(revision),packets:{}}",
+    ])
+    function("cache/ensure", [
+        "$execute unless data storage vanilla_map_post:live_cache players.p$(id){version:1} run function vanilla_map_post:live/cache/create with storage vanilla_map_post:live context",
+    ])
+    function("cache/restore", [
+        *(f"$execute store result score @s {score} run data get storage vanilla_map_post:live_cache players.p$(id).{field}"
+          for score, field in (("vmp_lcx", "cx"), ("vmp_lcz", "cz"), ("vmp_lmode", "mode"), ("vmp_lgen", "revision"))),
+    ])
+    function("cache/save_packet", [
+        "$data modify storage vanilla_map_post:live_cache players.p$(id).packets.g$(index) set from storage vanilla_map_post:live packet",
+    ])
+    function("cache/load_packet", [
+        "$execute unless data storage vanilla_map_post:live_cache players.p$(id).packets.g$(index).b19 run return 0",
+        "$data modify storage vanilla_map_post:live packet set from storage vanilla_map_post:live_cache players.p$(id).packets.g$(index)",
+        "return 1",
+    ])
+    function("cache/check_loaded", [
+        "$execute if loaded $(x) 0 $(z) run return 1",
+        "return 0",
     ])
     function("tick", [
         "scoreboard players add @s vmp_ltimer 1",
@@ -170,9 +224,26 @@ def datapack(pack, namespace):
         "execute if score @s vmp_lword matches 0 run scoreboard players set @s vmp_lg 210",
         "execute if score @s vmp_lword matches 0 run scoreboard players set @s vmp_lb 230",
     ])
-    lines = ["scoreboard players set @s vmp_ltimer 0",
-             "execute if score @s vmp_lsent matches 1 run function vanilla_map_post:live/remove",
-             "data modify storage vanilla_map_post:live packet set value {}"]
+    function("next", [
+        "scoreboard players set @s vmp_ltimer 0",
+        "function vanilla_map_post:live/cache/context",
+        "scoreboard players operation @s vmp_lword = @s vmp_lcx",
+        "scoreboard players operation @s vmp_lword *= #chunk vmp_lword",
+        "execute store result storage vanilla_map_post:live context.x int 1 run scoreboard players get @s vmp_lword",
+        "scoreboard players operation @s vmp_lword = @s vmp_lcz",
+        "scoreboard players operation @s vmp_lword *= #chunk vmp_lword",
+        "execute store result storage vanilla_map_post:live context.z int 1 run scoreboard players get @s vmp_lword",
+        "execute store result score @s vmp_lload run function vanilla_map_post:live/cache/check_loaded with storage vanilla_map_post:live context",
+        "scoreboard players set @s vmp_lcache 0",
+        "execute if score @s vmp_lmode matches 2 run scoreboard players set @s vmp_lload 1",
+        "execute if score @s vmp_lload matches 1 run function vanilla_map_post:live/sample_packet",
+        "execute if score @s vmp_lload matches 0 store result score @s vmp_lcache run function vanilla_map_post:live/cache/load_packet with storage vanilla_map_post:live context",
+        "execute if score @s vmp_lload matches 1 run function vanilla_map_post:live/send_current",
+        "execute if score @s vmp_lload matches 0 if score @s vmp_lcache matches 1 run function vanilla_map_post:live/send_current",
+        "scoreboard players add @s vmp_lindex 1",
+        "execute if score @s vmp_lindex matches 64.. run scoreboard players set @s vmp_lindex 0",
+    ])
+    lines = ["data modify storage vanilla_map_post:live packet set value {}"]
     for coordinate, slot in (("vmp_lcx", 0), ("vmp_lcz", 2)):
         lines += [f"scoreboard players operation @s vmp_lword = @s {coordinate}",
                   "scoreboard players add @s vmp_lword 32768",
@@ -213,6 +284,10 @@ def datapack(pack, namespace):
                   "scoreboard players operation @s vmp_lsum %= #sum vmp_lword"]
     lines += ["execute store result storage vanilla_map_post:live packet.b18 int 1 run scoreboard players get @s vmp_la",
               "execute store result storage vanilla_map_post:live packet.b19 int 1 run scoreboard players get @s vmp_lsum",
+              "function vanilla_map_post:live/cache/save_packet with storage vanilla_map_post:live context"]
+    function("sample_packet", lines)
+    function("send_current", [
+              "execute if score @s vmp_lsent matches 1 run function vanilla_map_post:live/remove",
               "function vanilla_map_post:live/emit with storage vanilla_map_post:live packet",
               "execute store result storage vanilla_map_post:live context.bank int 1 run scoreboard players get @s vmp_lbank",
               "function vanilla_map_post:live/receiver with storage vanilla_map_post:live context",
@@ -222,10 +297,7 @@ def datapack(pack, namespace):
               "function vanilla_map_post:clear_view",
               *(f"execute if score @s vmp_zoom matches {i} run posteffect add @s vanilla_map_post:{name}"
                 for i, name in enumerate(("map_far", "map", "map_near", "map_close"))),
-              "scoreboard players set @s vmp_lsent 1",
-              "scoreboard players add @s vmp_lindex 1",
-              "execute if score @s vmp_lindex matches 64.. run scoreboard players set @s vmp_lindex 0"]
-    function("next", lines)
+              "scoreboard players set @s vmp_lsent 1"])
 
     groups = defaultdict(list)
     names = set(BLOCK_COLORS) | {"minecraft:" + name for name in SURFACE_COLORS}

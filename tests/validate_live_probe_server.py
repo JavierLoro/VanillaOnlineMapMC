@@ -39,7 +39,8 @@ def validate(jar, datapack, directory, java="java", port=25566):
         'initial-enabled-packs=vanilla,file/live-probe.zip\nmanagement-server-enabled=false\nenable-rcon=false\n')
     log_path = directory / "validation.log"
     log = log_path.open("w", encoding="utf-8")
-    process = subprocess.Popen([java, "-Xms128M", "-Xmx768M", "-jar", str(jar), "--nogui"],
+    launch = [java, "-Xms128M", "-Xmx768M", "-jar", str(jar), "--nogui"]
+    process = subprocess.Popen(launch,
                                cwd=directory, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                stderr=subprocess.STDOUT, text=True, bufsize=1)
     output = queue.Queue()
@@ -97,6 +98,30 @@ def validate(jar, datapack, directory, java="java", port=25566):
         command("execute as @e[tag=vmp_probe] at @s run function vanilla_map_post:live/next")
         assert payload() == encode_packet(-2, -1, 0, [(30, 210, 230), (240, 50, 70)] * 2, 1)
         print("Minecraft 26.3: negative origin, live surface, changed block and checker packets match reference.", flush=True)
+        command("scoreboard players set @e[tag=vmp_probe] vmp_lmode 1")
+        command("scoreboard players set @e[tag=vmp_probe] vmp_lindex 0")
+        command("execute as @e[tag=vmp_probe] at @s run function vanilla_map_post:live/next")
+        saved = payload()
+        command("execute as @e[tag=vmp_probe] run function vanilla_map_post:live/stop")
+        command("stop")
+        process.wait(timeout=30)
+        reader.join(timeout=5)
+        output = queue.Queue()
+        process = subprocess.Popen(launch, cwd=directory, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                   stderr=subprocess.STDOUT, text=True, bufsize=1)
+        reader = threading.Thread(target=read, daemon=True)
+        reader.start()
+        wait_for(lambda line: "Done (" in line, 90)
+        # These coordinates are deliberately unloaded: the packet must come from
+        # command storage saved by the prior server process, not a fresh sample.
+        command("scoreboard players set @e[tag=vmp_probe] vmp_lcx 20000")
+        command("scoreboard players set @e[tag=vmp_probe] vmp_lcz 20000")
+        command("scoreboard players set @e[tag=vmp_probe] vmp_lindex 0")
+        command("execute as @e[tag=vmp_probe] at @s run function vanilla_map_post:live/next")
+        assert payload() == saved
+        command("execute as @e[tag=vmp_probe] at @s run function vanilla_map_post:live/resume")
+        assert payload() == saved
+        print("Saved chunk packet survives a clean server restart, replays without loaded terrain and resumes the original origin.", flush=True)
     finally:
         if process.poll() is None:
             command("stop")

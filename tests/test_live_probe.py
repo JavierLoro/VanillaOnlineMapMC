@@ -20,6 +20,7 @@ class Sender:
         self.storage = {}
         self.effects = {"a": [], "b": []}
         self.player = "a"
+        self.loaded = True
         for key, value in {"#byte": 256, "#sum": 255, "#chunk": 16, "#two": 2,
                            "#one": 1, "#four": 4}.items():
             self.scores[key, "vmp_lword"] = value
@@ -32,29 +33,42 @@ class Sender:
             x, z = self.storage["context.x"], self.storage["context.z"]
             for c, value in zip("rgb", (x % 256, z % 256, (x + z) % 256)):
                 self.scores[self.player, "vmp_l" + c] = value
-            return
+            return 0
+        if name == "live/cache/check_loaded":
+            return int(self.loaded)
         text = self.files[f"data/vanilla_map_post/function/{name}.mcfunction"]
-        for line in text.splitlines():
-            if line.startswith("$"):
-                line = re.sub(r"\$\((\w+)\)", lambda m: str(arguments[m[1]]), line[1:])
-            self.line(line)
+        try:
+            for line in text.splitlines():
+                if line.startswith("$"):
+                    line = re.sub(r"\$\((\w+)\)", lambda m: str(arguments[m[1]]), line[1:])
+                self.line(line)
+        except ReturnValue as result:
+            return result.value
+        return 0
 
     def line(self, line):
         if not line or line.startswith("#"):
             return 0
-        if line.startswith("execute if score "):
-            condition, command = line[17:].split(" run ", 1)
-            parts = condition.split()
-            value = self.scores.get(self.key(parts[0], parts[1]))
-            if value is None:
-                return 0
-            if parts[2] == "matches":
-                bounds = parts[3].split("..")
-                passed = value == int(bounds[0]) if len(bounds) == 1 else (
-                    (not bounds[0] or value >= int(bounds[0])) and (not bounds[1] or value <= int(bounds[1])))
-            else:
-                raise AssertionError(condition)
+        match = re.match(r"execute (if|unless) score (\S+) (\S+) matches (\S+) (.*)", line)
+        if match:
+            kind, holder, objective, interval, command = match.groups()
+            value = self.scores.get(self.key(holder, objective))
+            bounds = interval.split("..")
+            passed = value is not None and (value == int(bounds[0]) if len(bounds) == 1 else (
+                (not bounds[0] or value >= int(bounds[0])) and (not bounds[1] or value <= int(bounds[1]))))
+            if kind == "unless":
+                passed = not passed
+            command = command[4:] if command.startswith("run ") else "execute " + command
             return self.line(command) if passed else 0
+        match = re.match(r"execute (if|unless) data storage \S+ (\S+) run (.*)", line)
+        if match:
+            kind, path, command = match.groups()
+            if "{" in path:
+                path, version = path.split("{", 1)
+                passed = self.storage.get(path + ".version") == int(version.split(":")[1][:-1])
+            else:
+                passed = path in self.storage or any(k.startswith(path + ".") for k in self.storage)
+            return self.line(command) if passed == (kind == "if") else 0
         if line.startswith("execute store result "):
             target, command = line[21:].split(" run ", 1)
             value = self.line(command)
@@ -64,6 +78,9 @@ class Sender:
             else:
                 self.storage[parts[2]] = value
             return value
+        if line.startswith("return "):
+            value = self.line(line[11:]) if line.startswith("return run ") else int(line[7:])
+            raise ReturnValue(value)
         p = line.split()
         if p[:2] == ["scoreboard", "players"]:
             key = self.key(p[3], p[4])
@@ -82,16 +99,28 @@ class Sender:
         if p[:3] == ["data", "get", "storage"]:
             return self.storage[p[4]]
         if p[:3] == ["data", "modify", "storage"]:
-            prefix = p[4] + "."
-            self.storage = {k: v for k, v in self.storage.items() if not k.startswith(prefix)}
-            return 0
+            target = p[4]
+            if p[6] == "value":
+                value = json.loads(re.sub(r"(\w+):", r'"\1":', " ".join(p[7:])))
+                def flatten(value, key):
+                    result = {}
+                    for k, v in value.items():
+                        result.update(flatten(v, key + "." + k) if isinstance(v, dict) else {key + "." + k: v})
+                    return result
+                updates = flatten(value, target)
+            else:
+                source = p[9]
+                updates = {target + k[len(source):]: v for k, v in self.storage.items()
+                           if k == source or k.startswith(source + ".")}
+            self.storage = {k: v for k, v in self.storage.items() if k != target and not k.startswith(target + ".")}
+            self.storage.update(updates)
+            return 1
         if p[0] == "function":
             arguments = None
             if "with" in p:
                 prefix = p[-1] + "."
                 arguments = {k[len(prefix):]: v for k, v in self.storage.items() if k.startswith(prefix)}
-            self.run(p[1].split(":", 1)[1], arguments)
-            return 0
+            return self.run(p[1].split(":", 1)[1], arguments)
         if p[0] == "posteffect":
             effects = self.effects[self.player]
             if p[1] == "remove" and p[3] in effects:
@@ -102,6 +131,11 @@ class Sender:
         if p[0] == "tag":
             return 0
         raise AssertionError(line)
+
+
+class ReturnValue(Exception):
+    def __init__(self, value):
+        self.value = value
 
 
 class LiveProbeTests(unittest.TestCase):
@@ -123,7 +157,7 @@ class LiveProbeTests(unittest.TestCase):
         for player, cx, cz in (("a", -2, -1), ("b", 32767, -32768)):
             for objective, value in {"vmp_lcx": cx, "vmp_lcz": cz, "vmp_lgen": 255,
                                      "vmp_lindex": 0, "vmp_lbank": 0, "vmp_lsent": 0,
-                                     "vmp_lmode": 1, "vmp_zoom": 2}.items():
+                                     "vmp_lmode": 1, "vmp_zoom": 2, "vmp_lid": 1 if player == "a" else 2}.items():
                 sender.scores[player, objective] = value
             sender.effects[player] = ["vanilla_map_post:live/bank0", "vanilla_map_post:live/bank1"]
         for group in range(65):
@@ -193,6 +227,53 @@ class LiveProbeTests(unittest.TestCase):
                      (0, 0, 0, [(256, 0, 0)] * 4, 0)):
             with self.assertRaises(ValueError):
                 live_probe.encode_packet(*args)
+
+    def test_complete_chunk_cache_survives_sender_restart_and_replays_without_loaded_world(self):
+        with ZipFile(self.output / "vanilla-map-post-datapack.zip") as archive:
+            sender = Sender(archive)
+            restored = Sender(archive)
+        for objective, value in {"vmp_lid": 1, "vmp_lcx": -2, "vmp_lcz": -1,
+                                 "vmp_lgen": 5, "vmp_lmode": 1, "vmp_lindex": 0,
+                                 "vmp_lbank": 0, "vmp_lsent": 0, "vmp_zoom": 2}.items():
+            sender.scores["a", objective] = value
+        sender.run("live/cache/context")
+        sender.run("live/cache/create", {"id": 1, "cx": -2, "cz": -1, "mode": 1, "revision": 5})
+        sender.run("live/start")
+        for _ in range(63):
+            sender.run("live/next")
+        sender.run("live/stop")
+        restored.storage = json.loads(json.dumps(sender.storage))
+        restored.scores = sender.scores.copy()
+        restored.loaded = False
+        restored.scores["a", "vmp_lcx"] = 100
+        restored.run("live/resume")
+        self.assertEqual(restored.scores["a", "vmp_lcx"], -2)
+        for group in range(64):
+            if group:
+                restored.run("live/next")
+            colors = []
+            for pixel in range(4):
+                x, z = -32 + (group * 4 + pixel) % 16, -16 + group // 4
+                colors.append((x % 256, z % 256, (x + z) % 256))
+            self.assertEqual([restored.scores["a", f"vmp_lold{i}"] for i in range(20)],
+                             live_probe.encode_packet(-2, -1, group, colors, 5))
+        restored.run("live/disable")
+        self.assertEqual(restored.scores["a", "vmp_lresume"], 0)
+        self.assertFalse(any(":live/" in e for e in restored.effects["a"]))
+
+    def test_unloaded_missing_group_cannot_replay_another_players_data(self):
+        with ZipFile(self.output / "vanilla-map-post-datapack.zip") as archive:
+            sender = Sender(archive)
+        sender.loaded = False
+        for objective, value in {"vmp_lid": 2, "vmp_lcx": 0, "vmp_lcz": 0,
+                                 "vmp_lgen": 1, "vmp_lmode": 1, "vmp_lindex": 0,
+                                 "vmp_lbank": 0, "vmp_lsent": 0, "vmp_zoom": 2}.items():
+            sender.scores["a", objective] = value
+        for i, value in enumerate(live_probe.encode_packet(0, 0, 0, [(255, 0, 0)] * 4, 1)):
+            sender.storage[f"players.p1.packets.g0.b{i}"] = value
+        sender.run("live/next")
+        self.assertEqual(sender.effects["a"], [])
+        self.assertEqual(sender.scores["a", "vmp_lsent"], 0)
 
 
 if __name__ == "__main__":
