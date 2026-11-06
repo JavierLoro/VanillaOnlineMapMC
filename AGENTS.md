@@ -86,6 +86,8 @@ El siguiente paso es validar el mapa completo y la flecha en el juego: apertura,
 
 ## Experimento de actualización dinámica solicitado
 
+El usuario confirmó el 6 de noviembre de 2026 que funciona la prueba, tras la explicación del damero: patrón y transporte básico validados visualmente en su cliente. No extender esa confirmación a cambios de terreno, rendimiento medido o dos clientes reales. El siguiente control es la superficie real y su actualización al modificar un bloque.
+
 `--live-chunk-probe` añade un modo optativo, implementado en `backend/live_probe.py` y los shaders `live_*`. `/trigger vmp_live` captura el chunk donde se activa y transmite cuatro columnas de superficie cargada cada cuatro ticks. `/trigger vmp_live set 2` usa un damero; `set 3` lo detiene. Cerrar el mapa limpia sus efectos. Una vuelta de 64 lotes tarda 12,8 segundos a 20 TPS; no hay confirmación de recepción. Una ampliación en pantalla facilita observar el chunk. No se escribe terreno ni se fuerza carga. El color usa la paleta compartida mediante búsqueda equilibrada de tags; no incluye hillshading dinámico y los materiales desconocidos/columnas descargadas usan gris.
 
 Dos receptores con historiales de 16 × 17 píxeles transmiten la caché entre sí al reordenar uno, evitando perderla cuando Minecraft borra los targets de efectos retirados. Veinte escritores envían coordenadas, cuatro RGB, revisión y Fletcher-16; se rechazan paquetes inválidos y la repetición recupera grupos ausentes. Cada jugador conserva su estado; el storage compartido es solo scratch síncrono. El mapa añade un sampler, reduciendo a 14 el máximo de mosaicos para este modo. Las texturas base permanecen iguales. Sin la opción de exportación se conserva el comportamiento anterior.
