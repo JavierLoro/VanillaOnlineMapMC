@@ -26,6 +26,8 @@ layout(std140) uniform MapConfig {
     vec2 DetailWorldSize;
 };
 
+// PLAYER_MARKER
+
 void main() {
     // Keep north at the top and use the same number of blocks per pixel on both axes.
     vec2 screenOffset = vec2(texCoord.x - 0.5, 0.5 - texCoord.y);
@@ -50,11 +52,6 @@ void main() {
             color = mix(color, detailPixel.rgb, detailPixel.a);
         }
     }
-    if (any(notEqual(pan, vec2(0.0)))) {
-        float distanceToPlayer = length(playerOffset * OutSize.y / ViewHeight);
-        if (distanceToPlayer < 6.0) {
-            color = distanceToPlayer < 4.0 ? vec3(0.35, 0.85, 1.0) : background;
-        }
-    }
+    color = playerMarker(color, playerOffset, OutSize.y / ViewHeight);
     fragColor = vec4(color, 1.0);
 }

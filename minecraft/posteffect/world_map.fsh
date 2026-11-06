@@ -28,6 +28,8 @@ vec4 tilePixel(int index, ivec2 pixel) {
     // TILE_FETCH
 }
 
+// PLAYER_MARKER
+
 void main() {
     vec2 screenOffset = vec2(texCoord.x - 0.5, 0.5 - texCoord.y);
     vec2 viewSize = vec2(OutSize.x / OutSize.y, 1.0) * ViewHeight;
@@ -47,11 +49,6 @@ void main() {
         vec4 pixel = tilePixel(index, block - cell * TileSize);
         color = mix(background, pixel.rgb, pixel.a);
     }
-    if (any(notEqual(pan, vec2(0.0)))) {
-        float distanceToPlayer = length(playerOffset * OutSize.y / ViewHeight);
-        if (distanceToPlayer < 6.0) {
-            color = distanceToPlayer < 4.0 ? vec3(0.35, 0.85, 1.0) : background;
-        }
-    }
+    color = playerMarker(color, playerOffset, OutSize.y / ViewHeight);
     fragColor = vec4(color, 1.0);
 }

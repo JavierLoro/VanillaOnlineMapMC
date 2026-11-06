@@ -1,6 +1,6 @@
 # Prueba del mapa a pantalla completa en Minecraft Java 26.3
 
-El efecto toma el mapa del visor web y lo centra inicialmente en la cámara. La vista cenital combina colores de bioma con hillshading al 100 %, como la capa del visor web, sin topografía adicional ni desenfoque. Puedes desplazarte por el mapa con el ratón sin caminar. Un punto azul indica tu posición al apartar el mapa de la cruceta. Minecraft dibuja la cruceta y el resto del HUD encima.
+El efecto toma el mapa del visor web y lo centra inicialmente en la cámara. La vista cenital combina colores de bioma con hillshading al 100 %, como la capa del visor web, sin topografía adicional ni desenfoque. Puedes desplazarte por el mapa con el ratón sin caminar. Una flecha azul marca tu posición actual y conserva la dirección en la que mirabas al abrir el mapa. Minecraft dibuja la cruceta y el resto del HUD encima; la flecha tiene contorno oscuro y se extiende más allá del centro para que se distinga con la cruceta visible.
 
 La opción `--surface` añade un recorte de materiales y hillshading a resolución real 1 × 1 sobre el mapa completo. Fuera de ese recorte se conserva el fondo global. La vista continúa siendo cenital.
 
@@ -61,7 +61,7 @@ Instala ambos packs y actualiza `resource-pack-sha1`. Prueba las uniones, los bo
 1. Pon `vanilla-map-post-datapack.zip` en `datapacks/` de un mundo de prueba y arráncalo.
 2. Activa `vanilla-map-post-resources.zip` en el cliente o distribúyelo desde el servidor. Si usas `resource-pack-sha1`, actualízalo con el hash del ZIP.
 3. En primera persona y en el Overworld, ejecuta **`/trigger vmp_map`** para abrir el mapa. Ciérralo con **Mayús** (la tecla que tengas asignada a agacharte) o repite el comando.
-4. Sin caminar, mueve el ratón en horizontal y vertical. Comprueba que aparece el punto azul y que la vista vuelve a centrarse en tu posición al cerrar y abrir el mapa.
+4. Abre el mapa mirando en una dirección conocida. Comprueba la flecha antes de desplazar la vista, mueve el ratón y cambia de zoom: debe mantener la orientación de apertura. Cierra, mira en otra dirección y vuelve a abrir: la flecha debe actualizarse y la vista volver a centrarse en tu posición. Cada jugador conserva su propia orientación.
 5. El mapa abre con 1024 bloques de alto. Gira la rueda hacia arriba para acercarte a 512 y hacia abajo para volver a 1024, 2048 y 4096. El zoom mantiene el centro de la vista y al reabrir el mapa vuelve a 1024. Comprueba que se detiene en 512 y 4096 y que el nivel nuevo desaparece al cerrar con Mayús.
 6. Comprueba que las laderas y montañas se distinguen con el sombreado, que los biomas siguen siendo legibles y que el marcador permanece alineado en las cuatro escalas.
 
@@ -72,3 +72,9 @@ El recorrido cubre toda la imagen exportada y se detiene en sus bordes. El datap
 El servidor sigue enviando el movimiento con sus ticks, normalmente 20 veces por segundo. El shader suaviza los pasos entre actualizaciones con un historial de dos píxeles. La latencia de red y la carga del servidor siguen influyendo en la respuesta. El encuadre parte de tu posición al reabrir el mapa.
 
 Girar el ratón también cambia la dirección del personaje y el juego sigue permitiendo caminar. La rueda conserva su efecto normal sobre el objeto seleccionado y las teclas numéricas también pueden cambiar el zoom.
+
+## Orientación del marcador
+
+El datapack captura el yaw de cada jugador al abrir y lo redondea a 64 rumbos (pasos de 5,625 grados). El norte continúa arriba; yaw 0 apunta al sur, 90 al oeste, 180 al norte y −90 al este. Al desplazar la vista, la flecha sigue marcando la posición actual, con la orientación de apertura fija. Al cerrar se retira también su efecto de señal y al reabrir se captura el rumbo nuevo.
+
+La señal de orientación usa el píxel 8 de la misma fila que los ocho dígitos de desplazamiento. `navigation.fsh` la conserva en el canal alfa del píxel de tiempo (128..191), manteniendo dos píxeles de historial y el mismo presupuesto de samplers. `player_marker.glsl` se incorpora a los dos shaders de mapa durante la exportación. El cálculo del marcador queda limitado a su pequeño rectángulo de pantalla. Este cambio de protocolo requiere regenerar e instalar ambos packs de la misma revisión.

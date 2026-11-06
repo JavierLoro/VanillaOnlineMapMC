@@ -32,10 +32,12 @@ El servidor sigue proporcionando la entrada mediante sus ticks. La latencia de r
 
 ## 3. Completar los controles
 
-**Estado: ajuste del rango de zoom implementado; pendiente de validación visual. Después, clic derecho para recentrar.**
+**Estado: rango de zoom y flecha con orientación de apertura implementados; pendiente de validación visual. Después, clic derecho para recentrar.**
 
 - [x] Conservar la apertura en 1024 y las escalas 2048/4096; añadir un cuarto nivel de 512 para acercarse, por petición posterior del usuario.
 - [ ] Validar el rango nuevo, el centro al cambiar de escala y el regreso a 1024 al reabrir.
+- [x] Sustituir el punto por una flecha visible al abrir y al navegar, conservando la dirección de apertura de cada jugador.
+- [ ] Validar orientación, legibilidad bajo la cruceta, zoom, limpieza y rumbo nuevo al reabrir con dos jugadores.
 - [ ] Clic derecho para volver a centrar el mapa en el jugador conservando el zoom.
 - [ ] Clic izquierdo para seleccionar un punto o chunk y consultar sus coordenadas.
 - [ ] Limpiar la selección al volver a pulsar sobre ella.
@@ -89,14 +91,16 @@ La comparación real muestra caminos y construcciones más definidos a 1 × 1 y 
 
 El modo anterior `--surface surface.zip` se conserva para comparar un recorte con el fondo global. La prueba completa usa `backend/render_world_map.py` y `backend/export_posteffect_map.py --world-tiles <directorio>`. Procesa una copia estable por ventanas, con un halo de altura de un bloque, y guarda mosaicos de hasta 4096 píxeles sin reducción ni LOD. El manifiesto completo registra hashes y dimensiones. Los bordes se recortan a su tamaño real; huecos y chunks incompletos son transparentes y los materiales sin color usan gris neutro. El shader selecciona un solo sampler mediante un árbol equilibrado, con un máximo de 15 mosaicos más el estado. Si se supera el presupuesto, la generación falla expresamente.
 
-Generación real en ct111: seis mosaicos, 229,9 segundos y unos 339 MiB de memoria máxima del renderizador. Imágenes PNG: 24833526 bytes; texturas RGBA: 223008768 bytes sin otros buffers del cliente. Packs completos: datapack 6013 bytes y resource pack 24421850 bytes. Se conserva el zoom 512/1024/2048/4096 y se actualiza `resource-pack-sha1`. Las regiones, coordenadas, imágenes y manifiestos del mundo permanecen privados fuera de Git. Los cambios posteriores del mundo requieren otra generación.
+Generación real en ct111: seis mosaicos, 229,9 segundos y unos 339 MiB de memoria máxima del renderizador. Imágenes PNG: 24833526 bytes; texturas RGBA: 223008768 bytes sin otros buffers del cliente. Packs con la flecha: datapack 6475 bytes y resource pack 24442804 bytes. Las texturas del terreno no cambian. Se conserva el zoom 512/1024/2048/4096 y se actualiza `resource-pack-sha1`. Las regiones, coordenadas, imágenes y manifiestos del mundo permanecen privados fuera de Git. Los cambios posteriores del mundo requieren otra generación.
 
-Pasan 33 tests, incluidos continuidad entre mosaicos, bordes parciales, máscaras, corrupción, límites de samplers y las cuatro escalas. El shader compiló y enlazó con los includes oficiales 26.3 en OpenGL; se comprobaron bloques std140 y 256 píxeles renderizados para seis mosaicos y otros 256 para quince, visitando todos los samplers con coordenadas negativas, transparencia y bordes. Los valores int se contrastaron con el codec oficial. Esto no mide los FPS ni la memoria gráfica real del cliente. La invocación nueva del servidor y la descarga del pack se verifican por separado.
+La validación inicial del mundo completo cubrió 33 tests, incluidos continuidad entre mosaicos, bordes parciales, máscaras, corrupción, límites de samplers y las cuatro escalas. El shader compiló y enlazó con los includes oficiales 26.3 en OpenGL; se comprobaron bloques std140 y 256 píxeles renderizados para seis mosaicos y otros 256 para quince, visitando todos los samplers con coordenadas negativas, transparencia y bordes. Los valores int se contrastaron con el codec oficial. Esto no mide los FPS ni la memoria gráfica real del cliente. La invocación nueva del servidor y la descarga del pack se verifican por separado.
 
-El siguiente paso es validar en el cliente el mundo completo, el marcador, las uniones y los cuatro zooms. Después sigue planificada la isométrica fija, tratando vegetación y copas; Diorama y BlueMap continúan como referencias. El LOD se aplaza hasta que una medición lo justifique. La interfaz web instalada conserva su backend anterior.
+La flecha usa 64 rumbos capturados al abrir, independientes del yaw que mueve el mapa. Se transmite en un píxel de señal y se conserva en el alfa del píxel de tiempo, manteniendo el historial de dos píxeles. Se limpia al cerrar y se actualiza al reabrir. Pasan 36 tests; se comprobaron los 64 rumbos y la recuperación desde el historial mediante OpenGL y 266240 píxeles contrastados con una referencia (tolerancia 2/255), además de los mosaicos. Su legibilidad se revisó con una cruceta escalada en una previsualización.
+
+El siguiente paso es validar en el cliente el mundo completo, la orientación fija y la reapertura de la flecha, las uniones y los cuatro zooms. Después sigue planificada la isométrica fija, tratando vegetación y copas; Diorama y BlueMap continúan como referencias. El LOD se aplaza hasta que una medición lo justifique. La interfaz web instalada conserva su backend anterior.
 
 ## Próxima comprobación
 
-Reconectar para descargar el pack completo 1 × 1 y validar las uniones, el marcador y la respuesta en las cuatro escalas. La fase 2 ya está validada. La isométrica y el clic derecho para recentrar siguen pendientes.
+Reconectar para descargar el pack completo 1 × 1 y validar la flecha al abrir, su orientación fija al navegar, el rumbo nuevo al reabrir y la respuesta en las cuatro escalas. La fase 2 ya está validada. La isométrica y el clic derecho para recentrar siguen pendientes.
 
 Mantener sincronizados este roadmap y el estado de validación de `AGENTS.md` cuando se implemente una función o el usuario confirme una prueba.

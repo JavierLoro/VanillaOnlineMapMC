@@ -135,6 +135,10 @@ def read_world_tiles(directory):
     return world
 
 
+def marker_shader(source):
+    return source.replace("// PLAYER_MARKER", (PACK_ROOT / "player_marker.glsl").read_text())
+
+
 def world_shader(count):
     """Choose one sampler through a balanced tree, avoiding a scan of all tiles."""
     def dispatch(start, end, indent="    "):
@@ -147,7 +151,7 @@ def world_shader(count):
     if not 1 <= count <= 15:
         raise ValueError("World shader supports one to fifteen tiles")
     source = (PACK_ROOT / "world_map.fsh").read_text()
-    return (source.replace("// TILE_SAMPLERS", "\n".join(
+    return marker_shader(source.replace("// TILE_SAMPLERS", "\n".join(
                 f"uniform sampler2D Tile{i}Sampler;" for i in range(count)))
             .replace("// TILE_SIZES", "\n    ".join(f"vec2 Tile{i}Size;" for i in range(count)))
             .replace("// TILE_FETCH", dispatch(0, count).lstrip()))
@@ -253,10 +257,21 @@ def build(render_dir, output, view_height, style="relief", surface_path=None, wo
                 }]}
                 pack.writestr(f"{assets}/post_effect/pan/{pixel}_{value}.json", json.dumps(signal))
 
+        for heading in range(64):
+            signal = {"passes": [{
+                "vertex_shader": f"{NAMESPACE}:post/pan_signal",
+                "fragment_shader": f"{NAMESPACE}:post/pan_signal",
+                "output": "minecraft:main",
+                "uniforms": {"PanSignal": [
+                    {"name": "Signal", "type": "vec2", "value": [8, heading]},
+                ]},
+            }]}
+            pack.writestr(f"{assets}/post_effect/heading/{heading}.json", json.dumps(signal))
+
         if world is None:
             pack.writestr(f"{assets}/textures/effect/map.png", png.getvalue())
             pack.writestr(f"{assets}/textures/effect/detail.png", detail_png.getvalue())
-            pack.write(PACK_ROOT / "map.fsh", f"{assets}/shaders/post/map.fsh")
+            pack.writestr(f"{assets}/shaders/post/map.fsh", marker_shader((PACK_ROOT / "map.fsh").read_text()))
         else:
             for i, tile in enumerate(world["tiles"]):
                 payload = (world_tiles / tile["file"]).read_bytes()

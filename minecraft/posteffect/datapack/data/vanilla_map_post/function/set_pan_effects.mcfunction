@@ -1,4 +1,6 @@
 $data modify storage vanilla_map_post:pan operation set value "$(operation)"
+scoreboard players add @s vmp_heading 0
+execute store result storage vanilla_map_post:pan heading int 1 run scoreboard players get @s vmp_heading
 execute store result storage vanilla_map_post:pan x int 1 run scoreboard players get @s vmp_sent_x
 execute store result storage vanilla_map_post:pan z int 1 run scoreboard players get @s vmp_sent_z
 scoreboard players operation @s vmp_word = @s vmp_sent_x
