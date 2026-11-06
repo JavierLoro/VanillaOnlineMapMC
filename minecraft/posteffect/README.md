@@ -78,3 +78,27 @@ Girar el ratón también cambia la dirección del personaje y el juego sigue per
 El datapack captura el yaw de cada jugador al abrir y lo redondea a 64 rumbos (pasos de 5,625 grados). El norte continúa arriba; yaw 0 apunta al sur, 90 al oeste, 180 al norte y −90 al este. Al desplazar la vista, la flecha sigue marcando la posición actual, con la orientación de apertura fija. Al cerrar se retira también su efecto de señal y al reabrir se captura el rumbo nuevo.
 
 La señal de orientación usa el píxel 8 de la misma fila que los ocho dígitos de desplazamiento. `navigation.fsh` la conserva en el canal alfa del píxel de tiempo (128..191), manteniendo dos píxeles de historial y el mismo presupuesto de samplers. `player_marker.glsl` se incorpora a los dos shaders de mapa durante la exportación. El cálculo del marcador queda limitado a su pequeño rectángulo de pantalla. Este cambio de protocolo requiere regenerar e instalar ambos packs de la misma revisión.
+
+## Prueba de actualización de un chunk sin descargar otro pack
+
+Genera e instala ambos packs una vez con `--live-chunk-probe`, además de las opciones habituales de render:
+
+```bash
+python backend/export_posteffect_map.py --world-tiles /ruta/mosaicos --live-chunk-probe --output post-packs
+```
+
+Abre el mapa con `/trigger vmp_map` y activa la prueba con `/trigger vmp_live`. Captura el chunk de 16 × 16 donde está el jugador y vuelve a leer su superficie continuamente. `/trigger vmp_live set 2` transmite un damero rojo/cian para distinguir el transporte de la lectura del terreno. `/trigger vmp_live set 3` desactiva la prueba. Cerrar el mapa también retira todos sus efectos. Para capturar otro chunk, vuelve a activar la prueba desde él. La esquina superior derecha muestra una ampliación orientada al norte; los píxeles recibidos también sustituyen su posición real en el mapa.
+
+El servidor lee cuatro columnas por lote mediante `execute positioned over world_surface`, únicamente en chunks cargados. No fuerza carga ni escribe bloques. Usa la paleta compartida de materiales mediante un árbol equilibrado de tags opcionales; los materiales desconocidos y las columnas descargadas usan gris. Esta capa experimental no incorpora hillshading ni tintes de bioma. El fondo conserva el relieve original. Cada jugador tiene sus coordenadas, cursor, revisión y bytes anteriores; el storage es solo espacio de trabajo síncrono.
+
+Cada lote transmite 20 bytes: coordenadas de chunk de 16 bits con sesgo, grupo de cuatro píxeles, RGB completo, revisión y Fletcher-16. Cada byte selecciona uno de 256 efectos preinstalados que escribe un píxel reservado. Los paquetes incompletos o con checksum incorrecto se descartan; la repetición permite recuperar grupos no vistos entre fotogramas. No hay confirmación del cliente ni garantía de entrega en una sola vuelta. La revisión cambia al iniciar, no en cada recorrido. Cada lote permanece cuatro ticks: una vuelta de 64 lotes tarda aproximadamente 12,8 segundos a 20 TPS. Los cambios de bloques se reciben sin regenerar ni recargar ninguno de los packs.
+
+Dos receptores mantienen cada uno un historial de 16 × 17 píxeles. Al reordenar uno detrás de los escritores nuevos, el otro conserva y transmite la copia anterior mediante un rectángulo de la imagen de pantalla. Esto evita depender de que Minecraft conserve los targets de un efecto retirado: 26.3 los borra. El mapa consume ese rectángulo antes de dibujar su pantalla completa. Los historiales se pierden al cerrar, desconectar o recargar recursos y se reconstruyen activando la prueba. Los cambios de zoom mantienen los receptores activos.
+
+El modo añade un sampler al mapa: admite hasta 14 mosaicos, en lugar de 15. Solo existe si se usa la opción de exportación. Desactivado no emite lotes ni lee terreno. Activado añade 20 escritores, dos receptores de tres pases y comandos de control. No se ha demostrado que este transporte escale a un mundo o muchos jugadores. Tampoco detecta automáticamente chunks nuevos: esta prueba verifica primero un chunk cargado. El siguiente paso depende de medir FPS, carga, tráfico y recuperación en un cliente real.
+
+Validación reproducible:
+
+- `python -B -m unittest discover -s tests -v`: ejecuta también la aritmética y los macros del emisor para todos los píxeles, coordenadas negativas y dos jugadores; recorre la paleta y comprueba limpieza, límites y exportación optativa.
+- `python tests/validate_live_probe_server.py --jar /ruta/server.jar --datapack /ruta/datapack.zip --directory /directorio/nuevo`: comprueba en un servidor 26.3 aislado la lectura de superficie, un bloque cambiado y el damero. Requiere Java 25 y un puerto loopback libre (25566 por defecto); usa stdin, sin RCON ni acceso al mundo real.
+- `tests/CheckLiveProbe.java`: prueba OpenGL oculta con LWJGL 3.3.3 y sus natives. Argumentos: `minecraft/posteffect` y un directorio con `screenquad.vsh` oficial 26.3 y los shaders `live-world-14.fsh` y `live-map.fsh`, generados con `live_probe.shader`. Expande el include con el contenido oficial de `globals.glsl`; sustituye `gl_VertexIndex` por `gl_VertexID` en el vértice para la compilación OpenGL directa. Comprueba 35360 píxeles de caché exactos, reinicio del receptor, paquetes ausentes/corruptos, repetición y revisión; además 4096 píxeles de superposición, los límites del rectángulo de transporte y ambos shaders completos. No mide FPS de Minecraft.

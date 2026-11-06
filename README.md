@@ -93,7 +93,7 @@ The real crop shows sharper paths and structures at 1×1, together with noisier 
 
 ### Full world at one block per texel
 
-`backend/render_world_map.py` reads a stable world copy and renders bounded tiles at 1×1, with a one-block height halo to avoid shading seams. `backend/export_posteffect_map.py --world-tiles <directory>` packages the completed tiles without a coarse overview or LOD. Edge tiles retain their actual dimensions. Terrain remains static until regenerated. See [full-world build and limits](minecraft/posteffect/README.md#mundo-completo-a-1--1).
+`backend/render_world_map.py` reads a stable world copy and renders bounded tiles at 1×1, with a one-block height halo to avoid shading seams. `backend/export_posteffect_map.py --world-tiles <directory>` packages the completed tiles without a coarse overview or LOD. Edge tiles retain their actual dimensions. Terrain remains static until regenerated. The optional `--live-chunk-probe` adds a per-player experiment that streams one loaded 16×16 chunk through datapack commands without downloading another resource pack; its material overlay has no hillshading. See [full-world build and limits](minecraft/posteffect/README.md#mundo-completo-a-1--1) and [streaming experiment](minecraft/posteffect/README.md#prueba-de-actualización-de-un-chunk-sin-descargar-otro-pack).
 
 Run the reader, crop and pack regression tests after installing `requirements.txt`:
 

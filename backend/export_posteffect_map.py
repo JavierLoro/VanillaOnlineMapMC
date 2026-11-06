@@ -12,6 +12,11 @@ from zipfile import ZIP_DEFLATED, ZipFile
 
 from PIL import Image, ImageChops
 
+if __package__:
+    from . import live_probe
+else:
+    import live_probe
+
 
 ROOT = Path(__file__).resolve().parents[1]
 PACK_ROOT = ROOT / "minecraft" / "posteffect"
@@ -157,10 +162,12 @@ def world_shader(count):
             .replace("// TILE_FETCH", dispatch(0, count).lstrip()))
 
 
-def build(render_dir, output, view_height, style="relief", surface_path=None, world_tiles=None):
+def build(render_dir, output, view_height, style="relief", surface_path=None, world_tiles=None, live_chunk_probe=False):
     if surface_path is not None and world_tiles is not None:
         raise ValueError("Choose either a surface detail or a full world map")
     world = read_world_tiles(world_tiles) if world_tiles is not None else None
+    if live_chunk_probe and world is not None and len(world["tiles"]) > 14:
+        raise ValueError("Live probe needs one extra sampler; supported maximum is fourteen world tiles")
     if world is None:
         texture, origin, world_size = read_render(render_dir, style)
         detail, detail_offset, detail_size = read_detail(surface_path, origin, world_size)
@@ -181,6 +188,8 @@ def build(render_dir, output, view_height, style="relief", surface_path=None, wo
         "inputs": [{"sampler_name": "State", "target": "next_state"}],
         "output": "swap",
     }
+    if live_chunk_probe:
+        map_pass["inputs"].append({"sampler_name": "Live", "target": "minecraft:main"})
     if world is None:
         map_pass["inputs"].extend([
             {"sampler_name": "Map", "location": f"{NAMESPACE}:map",
@@ -271,23 +280,33 @@ def build(render_dir, output, view_height, style="relief", surface_path=None, wo
         if world is None:
             pack.writestr(f"{assets}/textures/effect/map.png", png.getvalue())
             pack.writestr(f"{assets}/textures/effect/detail.png", detail_png.getvalue())
-            pack.writestr(f"{assets}/shaders/post/map.fsh", marker_shader((PACK_ROOT / "map.fsh").read_text()))
+            source = marker_shader((PACK_ROOT / "map.fsh").read_text())
+            pack.writestr(f"{assets}/shaders/post/map.fsh", live_probe.shader(source, PACK_ROOT) if live_chunk_probe else source)
         else:
             for i, tile in enumerate(world["tiles"]):
                 payload = (world_tiles / tile["file"]).read_bytes()
                 if hashlib.sha256(payload).hexdigest() != tile["sha256"]:
                     raise ValueError("World tile changed during export")
                 pack.writestr(f"{assets}/textures/effect/world/{i}.png", payload)
-            pack.writestr(f"{assets}/shaders/post/world_map.fsh", world_shader(len(world["tiles"])))
+            source = world_shader(len(world["tiles"]))
+            pack.writestr(f"{assets}/shaders/post/world_map.fsh", live_probe.shader(source, PACK_ROOT) if live_chunk_probe else source)
         for shader in ("navigation.fsh", "pan_signal.vsh", "pan_signal.fsh"):
             pack.write(PACK_ROOT / shader, f"{assets}/shaders/post/{shader}")
+        if live_chunk_probe:
+            live_probe.resources(pack, PACK_ROOT, NAMESPACE)
 
     datapack = PACK_ROOT / "datapack"
     with ZipFile(output / "vanilla-map-post-datapack.zip", "w", ZIP_DEFLATED) as pack:
         write_metadata(pack, [121, 0], "VanillaOnlineMapMC map effect controls")
         for file in sorted(datapack.rglob("*")):
             if file.is_file():
-                pack.write(file, file.relative_to(datapack).as_posix())
+                destination = file.relative_to(datapack).as_posix()
+                if live_chunk_probe and file.suffix == ".mcfunction" and file.parent.name == "function":
+                    pack.writestr(destination, live_probe.lifecycle(file.name, file.read_text()))
+                else:
+                    pack.write(file, destination)
+        if live_chunk_probe:
+            live_probe.datapack(pack, NAMESPACE)
         pack.writestr(
             f"data/{NAMESPACE}/function/pan_config.mcfunction",
             f"scoreboard players set #sensitivity vmp_pan {pan_sensitivity}\n"
@@ -321,6 +340,8 @@ def main():
                         help="Initial vertical map span; closest level shows half this height")
     parser.add_argument("--style", choices=("relief", "biomes"), default="relief",
                         help="Terrain shading (default) or plain biome colors")
+    parser.add_argument("--live-chunk-probe", action="store_true",
+                        help="Experimental loaded 16x16 chunk streaming, enabled per player with /trigger vmp_live")
     source = parser.add_mutually_exclusive_group()
     source.add_argument("--surface", type=Path,
                         help="Optional surface.zip: one-block material/hillshade detail over the full map")
@@ -333,7 +354,7 @@ def main():
     args.output.mkdir(parents=True, exist_ok=True)
     with TemporaryDirectory(dir=args.output) as temporary:
         staging = Path(temporary)
-        build(args.render_dir, staging, args.view_height, args.style, args.surface, args.world_tiles)
+        build(args.render_dir, staging, args.view_height, args.style, args.surface, args.world_tiles, args.live_chunk_probe)
         for pack in sorted(staging.glob("*.zip")):
             destination = args.output / pack.name
             pack.replace(destination)

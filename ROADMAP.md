@@ -101,6 +101,14 @@ El siguiente paso es validar en el cliente el mundo completo, la orientación fi
 
 ## Próxima comprobación
 
+### Prueba solicitada de actualización dinámica
+
+Implementado el modo optativo `--live-chunk-probe`: `/trigger vmp_live` transmite la superficie del chunk cargado donde se activa, con una ampliación en pantalla; `set 2` prueba un damero y `set 3` lo desactiva. Cuatro columnas por lote, cuatro ticks entre lotes, 64 lotes por vuelta (12,8 segundos a 20 TPS). Solo colores de material, sin hillshading dinámico. No descarga ni regenera packs durante las actualizaciones, no fuerza chunks y no detecta aún nuevas regiones automáticamente.
+
+El receptor usa dos historiales alternos para sobrevivir al reordenamiento de efectos; comprueba Fletcher-16 y reconstruye grupos ausentes al repetir. La prueba añade 20 escritores y un sampler al mapa (máximo 14 mosaicos); se mantiene separada del modo normal. La generación inicial y su instalación requieren los dos packs de la misma revisión.
+
+Pasan 40 tests, incluyendo el emisor generado, dos jugadores y la paleta. La comprobación OpenGL cubre 35360 píxeles de caché y 4096 de superposición, además de compilación de ambos shaders completos. En el servidor aislado 26.3 se verificaron la carga sin errores, el origen negativo, la lectura de superficie, el paquete nuevo tras cambiar un bloque y el damero, contrastados con el codificador de referencia. Pendientes: validación real con cliente, cambio de bloques, cuatro zooms, cierre, dos jugadores, FPS y tráfico. La prueba funcional no acredita rendimiento ni escalabilidad; la detección incremental y el hillshading dependen de ese resultado.
+
 Reconectar para descargar el pack completo 1 × 1 y validar la flecha al abrir, su orientación fija al navegar, el rumbo nuevo al reabrir y la respuesta en las cuatro escalas. La fase 2 ya está validada. La isométrica y el clic derecho para recentrar siguen pendientes.
 
 Mantener sincronizados este roadmap y el estado de validación de `AGENTS.md` cuando se implemente una función o el usuario confirme una prueba.
