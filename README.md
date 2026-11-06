@@ -16,7 +16,7 @@ Interactive biome and terrain map viewer for Minecraft Java Edition worlds. Read
 - **Biome legend** — toggle visibility, click to highlight individual biomes
 - **Tooltips** — biome, coordinates, height, and top block name on hover
 - **Spawn marker** — reads `level.dat` to place the world spawn
-- **Persistent cache** — processed chunks stored in `chunk_cache.json`; only new/changed chunks are re-parsed on restart
+- **Persistent cache** — processed chunks stored in `chunk_cache.json`; new chunks are added when regions change, while tracked blocks in the active zone refresh periodically
 - **Zero server interference** — read-only access to world files
 
 ---
@@ -56,6 +56,46 @@ Interactive biome and terrain map viewer for Minecraft Java Edition worlds. Read
 - Minecraft Java Edition **1.18+** (see [version support](#minecraft-version-support))
 
 The optional fullscreen map prototype uses post-processing effects in **Minecraft Java 26.3**. [Build and test the map packs](minecraft/posteffect/README.md).
+
+## One-block surface crop
+
+The offline extractor reads a bounded area at **one column per block**, independently of the web map's 4×4 cache. It shares the NBT and block-state reader with the backend, including legacy `Name`/`Properties`, 26.3 compact strings and `id`/`properties`, and heterogeneous-list wrappers. Each section's packed indices are decoded once per chunk. Block properties are preserved.
+
+```bash
+python -B backend/extract_surface.py --world /path/to/world/dimensions/minecraft/overworld --origin-x -256 --origin-z -256 --size 512 --min-y -64 --output backend/map_images/surface-512
+```
+
+Use a stable copy of the world's region files. `--world` contains `region/`; the origin is the inclusive minimum X/Z and the crop extends towards positive X/Z. Set `--min-y` to the dimension's actual minimum Y (Overworld: -64). Output must be outside the world directory. This prototype supports fully generated 1.18+ chunks with padded heightmaps and gzip/zlib/uncompressed MCA chunks; external `.mcc` chunks and LZ4 are rejected explicitly.
+
+The output contains:
+
+- `surface.zip`: versioned `metadata.json`, `height.i16le` (surface block world Y), `state.u16le` (state palette indices), and `valid.u8` (1 = surface present). Arrays are row-major, with X increasing across the image and Z downwards. The palette retains each block ID and its properties. The source chunk coordinates, timestamps, payload hashes and data versions are recorded.
+- `surface.png`: a 1:1 diagnostic material image, with a separate color for dirt paths. Colors approximate materials; they do not render vanilla block models or biome tint. Unhandled materials appear magenta and are counted in the report. Missing or empty columns are transparent.
+- `report.json`: coverage, array and ZIP sizes, unknown material counts and elapsed extraction/export time.
+
+Heights use `raw + min_y - 1`, rather than the existing cache's averaged raw heightmap offsets. Validity is separate, so a real surface at Y=0 is preserved. The three arrays use **5 bytes per column**, or **1.25 MiB for 512×512**, before compression and excluding the palette, NBT and preview buffers. Each run reads the selected chunks afresh; it does not reuse or modify `chunk_cache.json`. Changed regions are rejected during extraction. The pack exporter accepts `--surface surface.zip` to overlay this one-block detail over the global map, preserving its coordinates, controls and zoom. [Build the detailed map packs](minecraft/posteffect/README.md#añadir-detalle-1--1).
+
+This is the extraction stage for the resolution comparison and planned fixed isometric surface. It stores only the top surface, without ground beneath canopies, interiors or overhangs. Those representations, tile/LOD support and in-game marker projection remain pending. See [ROADMAP.md](ROADMAP.md).
+
+### Compare 4×4 and 1×1
+
+```bash
+python -B backend/compare_surface.py --surface backend/map_images/surface-512/surface.zip --output backend/map_images/surface-comparison
+```
+
+The comparison reads the saved archive, uses the same material palette at both resolutions, and generates native material/hillshade PNGs, `comparison.png` (full extent), `detail.png` (a 128-block window enlarged equally), and `comparison.json`. The 4×4 view averages the 16 heights and samples the material at offset +1,+1, matching the web reader's sampling position. A coarse cell with any missing column stays transparent. The whole extent and origin are identical, and enlargement uses nearest-neighbor sampling.
+
+Both views use the web hillshading light coefficients and 0.3 minimum, multiplied into the material color at 100%, without blur or additional topography. Gradients divide by the physical spacing in blocks; `--vertical-scale` defaults to 1 and applies equally to both views. This intentionally differs from the production web formula, which divides by cell count and exaggerates slopes fourfold at 4×4. Set `--vertical-scale 4` to compare both views with that exaggeration. These images use material colors rather than the installed map's biome base, so this is a controlled resolution comparison, not a screenshot of the existing game map.
+
+The detail window is selected by maximum dirt-path coverage on a fixed 32-block grid. Its bounds and selection rule are recorded, alongside the full image for context. The report measures exact path overlap, recall and precision against the 1×1 surface, distinguishing omitted blocks from paths widened by coarse sampling. Render times exclude world extraction and do not measure client FPS, peak memory or resource-pack size. Diagnostic PNG sizes are recorded separately.
+
+The real crop shows sharper paths and structures at 1×1, together with noisier height gradients from vegetation. Ground beneath plants/canopies is not reconstructed in this comparison; that treatment remains a prerequisite for improving the isometric surface.
+
+Run the reader, crop and pack regression tests after installing `requirements.txt`:
+
+```bash
+python -B -m unittest discover -s tests -v
+```
 
 ---
 
@@ -187,7 +227,7 @@ Then set `WORLD_PATH` accordingly.
 - **NBT parser** is custom — zero external dependencies beyond Pillow and FastAPI.
 - Only chunks with `Status: minecraft:full` are rendered (fully generated terrain).
 - Cave biomes (`deep_dark`, `dripstone_caves`, `lush_caves`) are excluded from the surface map.
-- **Persistent cache**: processed chunks are stored in `backend/chunk_cache.json`. On restart, only new or changed `.mca` files trigger re-parsing — unchanged chunks load from disk instantly.
+- **Persistent cache**: processed chunks are stored in `backend/chunk_cache.json`. Changed `.mca` files trigger a scan for new chunks; already known chunks are reused. Top blocks in the active zone refresh on its TTL or `/api/refresh`; changes outside it are not tracked per chunk. The offline 1×1 extractor always reads its selected chunks afresh.
 - **Performance**: the backend generates server-side PNGs (≈3 MB total) instead of sending raw JSON. The map appears in ~1s on a 20 Mbps connection vs 80s+ with raw chunk data.
-- **Memory at rest**: ~50 MB. Read-only on the world; `chunk_cache.json` is the only write.
+- **Memory** grows with the loaded world, derived tile dictionaries and PNG buffers. The backend reads the world without modifying it and writes its own cache and render files. The bounded 1×1 extractor uses separate compact arrays.
 - **GPU compositing**: the frontend stacks PNG layers on an HTML5 canvas using multiply blend mode for shade/hillshading. No per-tile DOM elements.

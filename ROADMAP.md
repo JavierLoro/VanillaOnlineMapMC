@@ -65,19 +65,34 @@ El servidor sigue proporcionando la entrada mediante sus ticks. La latencia de r
 
 ## 6. Detalle por bloque y vista inclinada
 
-**Estado: investigación y prueba propuesta.**
+**Estado: comparación aceptada por el usuario; detalle cenital 1 × 1 integrado e instalado en ct111. Validación en el juego e isométrica pendientes.**
 
-- [ ] Incorporar y comprobar la compatibilidad del lector de materiales con los estados compactos de Java 26.3; existe una corrección en la rama del mapa flotante.
-- [ ] Elegir un recorte de 512 × 512 bloques con un camino estrecho, una construcción y desnivel.
-- [ ] Comparar representaciones 4 × 4 y 1 × 1 con el mismo encuadre y tratamiento visual.
-- [ ] Medir generación, tamaño del pack y respuesta dentro del juego.
+- [x] Normalizar estados antiguos, compactos y envueltos de Java 26.3, conservando propiedades y decodificando cada sección una sola vez por chunk.
+- [x] Convertir alturas a Y real en el extractor 1 × 1, con mínimo de dimensión explícito y máscara independiente para columnas ausentes. El contrato y la caché web 4 × 4 se conservan.
+- [x] Extraer un recorte 512 × 512 de un mundo real con caminos, construcciones y desnivel; conservar sus datos e informes fuera de Git.
+- [x] Guardar alturas, estados y máscara en arrays compactos con formato versionado, origen y resolución explícitos; generar una previsualización de materiales.
+- [x] Comparar representaciones 4 × 4 y 1 × 1 con el mismo encuadre, paleta de materiales y hillshading calculado con separación física en bloques.
+- [x] Integrar el recorte 1 × 1 sobre el mapa global, sin reducirlo ni alterar controles, límites o zoom.
+- [x] Comprobar exportación, compilación gráfica y arranque del servidor con el pack instalado.
+- [x] Medir el tamaño de los packs generados.
+- [ ] Validar respuesta, legibilidad y transición al fondo global dentro del juego.
 - [ ] Comprobar la alineación del marcador en distintas alturas.
 - [ ] Valorar el detalle cercano y la vista inclinada según el resultado.
 
-Diorama, BlueMap y los demás renderizadores investigados sirven como referencias para el proceso que convierte los datos del mundo en imágenes. Esta fase todavía requiere una decisión de implementación.
+`backend/extract_surface.py` lee los chunks seleccionados de nuevo en cada ejecución, separado de la caché web. Se validó con una copia autorizada de cuatro regiones de un mundo real, incluyendo formatos antiguos y de Java 26.3, y un recorte completo de 512 × 512 con caminos, construcciones y desnivel. Los arrays ocupan 1,25 MiB sin comprimir. Las coordenadas, el contenido del mundo y los informes detallados permanecen fuera de Git. El lector web también procesó las cuatro regiones completas sin errores.
+
+`backend/compare_surface.py` genera vistas nativas de 128 × 128 y 512 × 512, una comparación del encuadre completo y un detalle de 128 bloques ampliado por igual, elegido por máxima presencia de caminos en una malla fija de 32 bloques. Mantiene los mismos colores y coeficientes de luz en ambas vistas; el gradiente usa la distancia real entre muestras y escala vertical 1 por defecto, sin desenfoque. La fórmula web actual exagera pendientes por cuatro en la malla 4 × 4; `--vertical-scale 4` permite usar esa exageración en ambas vistas. Esta comparación de materiales no reproduce la base de biomas del pack instalado.
+
+La comparación real muestra caminos y construcciones más definidos a 1 × 1 y más ruido de altura de la vegetación. El usuario aceptó el resultado y pidió instalarlo. Los informes locales conservan métricas de solapamiento de caminos, tamaños de PNG y tiempos; no miden FPS ni RAM máxima. La validación inicial de la comparación cubrió 23 tests.
+
+`backend/export_posteffect_map.py --surface surface.zip` conserva el fondo global y añade una textura de detalle con un texel por bloque, materiales y hillshading a escala vertical 1, sin desenfoque. Fuera del recorte y en columnas ausentes o materiales sin color se mantiene el fondo. La prueba instalada en ct111 usa un recorte de 512 × 512; la conversión del mundo completo requiere mosaicos/LOD. Packs finales: datapack 5991 bytes y resource pack 1726440 bytes. Se actualiza `resource-pack-sha1`, conservando la URL del pack y los permisos.
+
+Pasan 26 tests. El shader se compiló y enlazó con los includes oficiales de Minecraft 26.3 en OpenGL; se comprobaron bloques std140 y ocho píxeles de coordenadas, bordes y transparencia mediante render real. La prueba del servidor comprueba la invocación nueva y la descarga del pack; la validación visual del cliente está pendiente.
+
+El siguiente paso es validar en el cliente el detalle, el marcador, los bordes del recorte y el zoom. Después sigue planificada la isométrica fija del mismo recorte, tratando vegetación y copas; Diorama y BlueMap continúan como referencias. La interfaz web instalada conserva su backend anterior.
 
 ## Próxima comprobación
 
-Regenerar e instalar ambos packs con relieve cenital y validarlo dentro del juego junto con el rango 1024/2048/4096. La fase 2 ya está validada. Después, implementar el clic derecho para recentrar.
+Reconectar para descargar el pack actualizado y validar el detalle 1 × 1 dentro del mapa global, junto con el rango 1024/2048/4096. La fase 2 ya está validada. La isométrica y el clic derecho para recentrar siguen pendientes.
 
 Mantener sincronizados este roadmap y el estado de validación de `AGENTS.md` cuando se implemente una función o el usuario confirme una prueba.

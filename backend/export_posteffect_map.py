@@ -1,4 +1,4 @@
-"""Build the Java 26.3 fullscreen map packs from a completed web render."""
+"""Build fullscreen map packs, optionally adding a one-block surface detail."""
 
 import argparse
 import gzip
@@ -73,13 +73,45 @@ def write_metadata(pack, version, description):
     }}))
 
 
-def build(render_dir, output, view_height, style="relief"):
+def read_detail(path, origin, world_size):
+    if path is None:
+        return Image.new("RGBA", (1, 1)), (0, 0), (0, 0)
+    if __package__:
+        from .compare_surface import load_surface, render, sample_surface
+        from .extract_surface import material_color
+    else:
+        from compare_surface import load_surface, render, sample_surface
+        from extract_surface import material_color
+    before = path.stat()
+    surface = load_surface(path)
+    if surface.size > TEXTURE_LIMIT:
+        raise ValueError("Surface detail must fit without reducing its one-block resolution")
+    offset = (surface.origin_x - origin[0], surface.origin_z - origin[2])
+    if any(start < 0 or start + surface.size > extent
+           for start, extent in zip(offset, world_size)):
+        raise ValueError("Surface detail must lie inside the full map bounds")
+    _, texture = render(sample_surface(surface, 1))
+    unknown = {i for i, (name, _) in enumerate(surface.palette) if material_color(name) is None}
+    for i, state in enumerate(surface.states):
+        if state in unknown:
+            # Production packs retain the overview instead of diagnostic magenta.
+            texture.putpixel((i % surface.size, i // surface.size), (0, 0, 0, 0))
+    after = path.stat()
+    if (before.st_mtime_ns, before.st_size) != (after.st_mtime_ns, after.st_size):
+        raise ValueError("Surface detail changed during export")
+    return texture, offset, (surface.size, surface.size)
+
+
+def build(render_dir, output, view_height, style="relief", surface_path=None):
     texture, origin, world_size = read_render(render_dir, style)
+    detail, detail_offset, detail_size = read_detail(surface_path, origin, world_size)
     pan_units = max(1, math.ceil(max(world_size) * 16 / PAN_CENTER))
     pan_step = pan_units / 16
     pan_sensitivity = max(1, min(32767, round(view_height / (128 * pan_step))))
     png = BytesIO()
     texture.save(png, format="PNG", optimize=True)
+    detail_png = BytesIO()
+    detail.save(detail_png, format="PNG", optimize=True)
     map_pass = {
         "vertex_shader": "minecraft:core/screenquad",
         "fragment_shader": f"{NAMESPACE}:post/map",
@@ -88,6 +120,10 @@ def build(render_dir, output, view_height, style="relief"):
             {
                 "sampler_name": "Map", "location": f"{NAMESPACE}:map",
                 "width": texture.width, "height": texture.height,
+            },
+            {
+                "sampler_name": "Detail", "location": f"{NAMESPACE}:detail",
+                "width": detail.width, "height": detail.height,
             },
         ],
         "output": "swap",
@@ -124,6 +160,8 @@ def build(render_dir, output, view_height, style="relief"):
                 {"name": "ViewHeight", "type": "float", "value": span},
                 {"name": "MapWorldSize", "type": "vec2", "value": world_size},
                 {"name": "PanStep", "type": "float", "value": pan_step},
+                {"name": "DetailOffset", "type": "vec2", "value": detail_offset},
+                {"name": "DetailWorldSize", "type": "vec2", "value": detail_size},
             ]})
             effect = {
                 "targets": {
@@ -148,6 +186,7 @@ def build(render_dir, output, view_height, style="relief"):
                 pack.writestr(f"{assets}/post_effect/pan/{pixel}_{value}.json", json.dumps(signal))
 
         pack.writestr(f"{assets}/textures/effect/map.png", png.getvalue())
+        pack.writestr(f"{assets}/textures/effect/detail.png", detail_png.getvalue())
         for shader in ("map.fsh", "navigation.fsh", "pan_signal.vsh", "pan_signal.fsh"):
             pack.write(PACK_ROOT / shader, f"{assets}/shaders/post/{shader}")
 
@@ -189,6 +228,8 @@ def main():
     parser.add_argument("--view-height", type=int, default=1024, help="Initial and minimum vertical map span in blocks")
     parser.add_argument("--style", choices=("relief", "biomes"), default="relief",
                         help="Terrain shading (default) or plain biome colors")
+    parser.add_argument("--surface", type=Path,
+                        help="Optional surface.zip: one-block material/hillshade detail over the full map")
     args = parser.parse_args()
     if not 1 <= args.view_height <= 60_000_000:
         parser.error("--view-height must be between 1 and 60000000 blocks")
@@ -196,7 +237,7 @@ def main():
     args.output.mkdir(parents=True, exist_ok=True)
     with TemporaryDirectory(dir=args.output) as temporary:
         staging = Path(temporary)
-        build(args.render_dir, staging, args.view_height, args.style)
+        build(args.render_dir, staging, args.view_height, args.style, args.surface)
         for pack in sorted(staging.glob("*.zip")):
             destination = args.output / pack.name
             pack.replace(destination)

@@ -1,5 +1,4 @@
 import gzip
-import importlib.util
 import json
 import os
 from pathlib import Path
@@ -9,11 +8,12 @@ from zipfile import ZipFile
 
 from PIL import Image
 
+from backend import export_posteffect_map as EXPORT
+from backend.extract_surface import Surface
+from backend.compare_surface import render, sample_surface
+
 
 ROOT = Path(__file__).resolve().parents[1]
-SPEC = importlib.util.spec_from_file_location("map_export", ROOT / "backend/export_posteffect_map.py")
-EXPORT = importlib.util.module_from_spec(SPEC)
-SPEC.loader.exec_module(EXPORT)
 
 
 class ExportReliefTests(unittest.TestCase):
@@ -98,6 +98,68 @@ class ExportReliefTests(unittest.TestCase):
                                       if "MapConfig" in p.get("uniforms", {}))
                         spans.append(next(v["value"] for v in config if v["name"] == "ViewHeight"))
                     self.assertEqual(spans, [1024, 2048, 4096])
+
+    def test_detail_preserves_one_block_pixels_world_alignment_and_controls(self):
+        surface = Surface(-4, 12, 4, -64)
+        surface.palette.append(("minecraft:dirt_path", ()))
+        for i in range(16):
+            surface.states[i] = 1
+            surface.heights[i] = 64
+            surface.valid[i] = i != 5
+        source = self.render / "surface"
+        surface.save(source)
+        plain_dir, detail_dir = self.render / "overview", self.render / "detail"
+        plain_dir.mkdir()
+        detail_dir.mkdir()
+        EXPORT.build(self.render, plain_dir, 1024)
+        EXPORT.build(self.render, detail_dir, 1024, surface_path=source / "surface.zip")
+        with ZipFile(plain_dir / "vanilla-map-post-datapack.zip") as old, ZipFile(
+                detail_dir / "vanilla-map-post-datapack.zip") as new:
+            self.assertEqual({n: old.read(n) for n in old.namelist()},
+                             {n: new.read(n) for n in new.namelist()})
+        with ZipFile(detail_dir / "vanilla-map-post-resources.zip") as pack:
+            from io import BytesIO
+            with Image.open(BytesIO(pack.read("assets/vanilla_map_post/textures/effect/detail.png"))) as image:
+                expected = render(sample_surface(surface, 1))[1]
+                self.assertEqual(image.size, (4, 4))
+                self.assertEqual(image.tobytes(), expected.tobytes())
+                self.assertEqual(image.getpixel((1, 1))[3], 0)
+            for effect, span in (("map_near", 1024), ("map", 2048), ("map_far", 4096)):
+                effect = json.loads(pack.read(f"assets/vanilla_map_post/post_effect/{effect}.json"))
+                map_pass = next(p for p in effect["passes"] if "MapConfig" in p.get("uniforms", {}))
+                config = {v["name"]: v["value"] for v in map_pass["uniforms"]["MapConfig"]}
+                self.assertEqual(config["MapOrigin"], [-8, 0, 12])
+                self.assertEqual(config["MapWorldSize"], [12, 4])
+                self.assertEqual(config["DetailOffset"], [4, 0])
+                self.assertEqual(config["DetailWorldSize"], [4, 4])
+                self.assertEqual(config["ViewHeight"], span)
+                detail = next(i for i in map_pass["inputs"] if i["sampler_name"] == "Detail")
+                self.assertEqual((detail["width"], detail["height"]), (4, 4))
+                # A marker at this world column reaches the identical detail texel.
+                player_x, player_z = -2.5, 14.5
+                texel = (int(player_x - config["MapOrigin"][0] - config["DetailOffset"][0]),
+                         int(player_z - config["MapOrigin"][2] - config["DetailOffset"][1]))
+                self.assertEqual(texel, (1, 2))
+
+    def test_detail_rejects_outside_bounds_and_disabled_detail_is_transparent(self):
+        surface = Surface(-20, 12, 4, -64)
+        source = self.render / "outside"
+        surface.save(source)
+        with self.assertRaisesRegex(ValueError, "inside the full map"):
+            EXPORT.read_detail(source / "surface.zip", (-8, 0, 12), (12, 4))
+        image, offset, size = EXPORT.read_detail(None, (-8, 0, 12), (12, 4))
+        self.assertEqual((offset, size), ((0, 0), (0, 0)))
+        self.assertEqual(image.getpixel((0, 0))[3], 0)
+
+    def test_unhandled_material_uses_overview_instead_of_diagnostic_magenta(self):
+        surface = Surface(-4, 12, 4, -64)
+        surface.palette.append(("custom:unhandled_block", ()))
+        surface.valid[0] = 1
+        surface.states[0] = 1
+        source = self.render / "unhandled"
+        surface.save(source)
+        texture, _, _ = EXPORT.read_detail(source / "surface.zip", (-8, 0, 12), (12, 4))
+        self.assertEqual(texture.getpixel((0, 0)), (0, 0, 0, 0))
 
 
 if __name__ == "__main__":

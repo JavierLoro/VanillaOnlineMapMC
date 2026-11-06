@@ -5,6 +5,7 @@
 
 uniform sampler2D StateSampler;
 uniform sampler2D MapSampler;
+uniform sampler2D DetailSampler;
 
 layout(location = 0) in vec2 texCoord;
 layout(location = 0) out vec4 fragColor;
@@ -13,6 +14,7 @@ layout(std140) uniform SamplerInfo {
     vec2 OutSize;
     vec2 StateSize;
     vec2 MapSize;
+    vec2 DetailSize;
 };
 
 layout(std140) uniform MapConfig {
@@ -20,6 +22,8 @@ layout(std140) uniform MapConfig {
     float ViewHeight;
     vec2 MapWorldSize;
     float PanStep;
+    vec2 DetailOffset;
+    vec2 DetailWorldSize;
 };
 
 void main() {
@@ -38,6 +42,13 @@ void main() {
     if (all(greaterThanEqual(uv, vec2(0.0))) && all(lessThan(uv, vec2(1.0)))) {
         vec4 mapPixel = texture(MapSampler, uv);
         color = mix(background, mapPixel.rgb, mapPixel.a);
+        vec2 detailPosition = camera + playerOffset - DetailOffset;
+        if (all(greaterThanEqual(detailPosition, vec2(0.0))) &&
+            all(lessThan(detailPosition, DetailWorldSize))) {
+            // One source texel per world block; transparent columns keep the overview.
+            vec4 detailPixel = texelFetch(DetailSampler, ivec2(floor(detailPosition)), 0);
+            color = mix(color, detailPixel.rgb, detailPixel.a);
+        }
     }
     if (any(notEqual(pan, vec2(0.0)))) {
         float distanceToPlayer = length(playerOffset * OutSize.y / ViewHeight);

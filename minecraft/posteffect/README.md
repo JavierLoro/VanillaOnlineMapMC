@@ -2,6 +2,8 @@
 
 El efecto toma el mapa del visor web y lo centra inicialmente en la cámara. La vista cenital combina colores de bioma con hillshading al 100 %, como la capa del visor web, sin topografía adicional ni desenfoque. Puedes desplazarte por el mapa con el ratón sin caminar. Un punto azul indica tu posición al apartar el mapa de la cruceta. Minecraft dibuja la cruceta y el resto del HUD encima.
 
+La opción `--surface` añade un recorte de materiales y hillshading a resolución real 1 × 1 sobre el mapa completo. Fuera de ese recorte se conserva el fondo global. La vista continúa siendo cenital.
+
 ## Generar los packs
 
 Con Python 3.11+ y Pillow instalados, ejecuta desde la raíz del repositorio cuando haya terminado el render del visor.
@@ -22,6 +24,20 @@ python backend/export_posteffect_map.py --render-dir backend/map_images --output
 ```
 
 Las capas deben tener las mismas dimensiones que la base, no ser anteriores a ella y estar guardadas antes del índice. El exportador comprueba su coherencia y que no cambien durante la generación.
+
+## Añadir detalle 1 × 1
+
+Extrae primero un `surface.zip` con [el extractor de superficie](../../README.md#one-block-surface-crop). A continuación:
+
+```bash
+python backend/export_posteffect_map.py --render-dir backend/map_images --surface backend/map_images/surface-512/surface.zip --output post-detail-packs
+```
+
+El recorte debe estar dentro de los límites del render global y medir como máximo 2048 bloques de lado. Se conserva un texel por bloque, con el mismo hillshading y paleta aproximada de materiales de la comparación 1 × 1, escala vertical 1 y sin desenfoque. El exportador nunca reduce esta textura; las columnas transparentes y los materiales sin color mantienen visible el fondo, sin el magenta del diagnóstico local. `--style` controla el fondo global; el detalle siempre usa materiales y hillshading.
+
+El resource pack contiene dos texturas: el fondo global y el detalle. El shader consulta el detalle únicamente dentro de sus límites y toma el texel del bloque correspondiente, sin filtrado entre bloques. Conserva la proyección, los límites globales, el marcador, los controles y las escalas 1024/2048/4096. Añade una consulta de textura por píxel dentro del recorte; los FPS y la legibilidad en el cliente siguen pendientes de validación. El borde entre colores de bioma y materiales puede ser visible, y la vegetación conserva el ruido de altura observado en la comparación.
+
+Regenera e instala ambos packs de la misma revisión al incorporar este sampler y sus uniformes. El servidor debe distribuir el ZIP nuevo y actualizar su `resource-pack-sha1`; reconecta el cliente para descargarlo. La ampliación 1 × 1 al mundo completo requiere mosaicos/LOD y sigue pendiente.
 
 ## Instalar y probar
 
