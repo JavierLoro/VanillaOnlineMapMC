@@ -37,7 +37,24 @@ El recorte debe estar dentro de los límites del render global y medir como máx
 
 El resource pack contiene dos texturas: el fondo global y el detalle. El shader consulta el detalle únicamente dentro de sus límites y toma el texel del bloque correspondiente, sin filtrado entre bloques. Conserva la proyección, los límites globales, el marcador y los controles. Las escalas son 512/1024/2048/4096, con apertura en 1024. Añade una consulta de textura por píxel dentro del recorte; los FPS y la legibilidad en el cliente siguen pendientes de validación. El borde entre colores de bioma y materiales puede ser visible, y la vegetación conserva el ruido de altura observado en la comparación.
 
-Regenera e instala ambos packs de la misma revisión al incorporar este sampler y sus uniformes. El servidor debe distribuir el ZIP nuevo y actualizar su `resource-pack-sha1`; reconecta el cliente para descargarlo. La ampliación 1 × 1 al mundo completo requiere mosaicos/LOD y sigue pendiente.
+Regenera e instala ambos packs de la misma revisión al incorporar este sampler y sus uniformes. El servidor debe distribuir el ZIP nuevo y actualizar su `resource-pack-sha1`; reconecta el cliente para descargarlo. Para cubrir todo el mundo a 1 × 1, utiliza el modo de mosaicos descrito a continuación.
+
+## Mundo completo a 1 × 1
+
+Genera desde una copia estable del directorio que contiene `region/`, con Pillow y las dependencias del proyecto:
+
+```bash
+python -B backend/render_world_map.py --world /path/to/stable/overworld --output backend/map_images/world-1x1
+python -B backend/export_posteffect_map.py --world-tiles backend/map_images/world-1x1 --output post-world-packs
+```
+
+`--world-tiles` sustituye el fondo y el recorte por el terreno completo, con materiales y hillshading a escala vertical 1. No utiliza LOD ni reduce imágenes al alejarse. Conserva los cuatro zooms, el marcador y los controles. Los huecos sin superficie y los chunks que no estén completos permanecen transparentes; los materiales sin color usan gris neutro. Las fronteras se calculan desde los chunks asignados en las cabeceras de las regiones, de modo que pueden incluir un margen de generación incompleta.
+
+El renderizador procesa mosaicos de hasta 4096 bloques por lado, leyendo un halo de un bloque para mantener el mismo sombreado a ambos lados de cada unión. Recorta las texturas de los bordes a sus dimensiones reales. No mantiene el mundo entero como diccionarios ni como una imagen gigante. Guarda PNGs y `world-map.json`, con límites, tamaños, hashes y estadísticas; el manifiesto completo solo se publica al terminar y comprobar que la fuente no ha cambiado. Usa una carpeta de salida nueva en cada generación. Los datos e imágenes del mundo deben permanecer fuera de Git.
+
+El exportador verifica cada imagen contra su hash y sus dimensiones antes de incorporarla. El shader calcula directamente el índice del mosaico y lo selecciona con un árbol de decisiones, con una sola lectura de terreno por píxel. Se admiten hasta 15 texturas de terreno, más la textura de estado, dentro del mínimo de 16 samplers de fragmento de OpenGL 3.3. Si el mundo supera ese presupuesto, la generación falla expresamente; no reduce la resolución ni omite terreno. Las texturas y los datos del pack siguen siendo estáticos: los cambios posteriores del mundo necesitan regeneración.
+
+Instala ambos packs y actualiza `resource-pack-sha1`. Prueba las uniones, los bordes exteriores, el marcador y la fluidez en las cuatro escalas. El tamaño del ZIP, la generación y la memoria del servidor se miden aparte de la memoria gráfica y los FPS del cliente.
 
 ## Instalar y probar
 

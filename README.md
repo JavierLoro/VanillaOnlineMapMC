@@ -91,6 +91,10 @@ The detail window is selected by maximum dirt-path coverage on a fixed 32-block 
 
 The real crop shows sharper paths and structures at 1×1, together with noisier height gradients from vegetation. Ground beneath plants/canopies is not reconstructed in this comparison; that treatment remains a prerequisite for improving the isometric surface.
 
+### Full world at one block per texel
+
+`backend/render_world_map.py` reads a stable world copy and renders bounded tiles at 1×1, with a one-block height halo to avoid shading seams. `backend/export_posteffect_map.py --world-tiles <directory>` packages the completed tiles without a coarse overview or LOD. Edge tiles retain their actual dimensions. Terrain remains static until regenerated. See [full-world build and limits](minecraft/posteffect/README.md#mundo-completo-a-1--1).
+
 Run the reader, crop and pack regression tests after installing `requirements.txt`:
 
 ```bash

@@ -65,7 +65,7 @@ El servidor sigue proporcionando la entrada mediante sus ticks. La latencia de r
 
 ## 6. Detalle por bloque y vista inclinada
 
-**Estado: comparación aceptada por el usuario; detalle cenital 1 × 1 integrado e instalado en ct111. Validación en el juego e isométrica pendientes.**
+**Estado: mundo completo a 1 × 1 instalado en ct111, sin LOD. Descarga y arranque comprobados; validación en el cliente e isométrica pendientes.**
 
 - [x] Normalizar estados antiguos, compactos y envueltos de Java 26.3, conservando propiedades y decodificando cada sección una sola vez por chunk.
 - [x] Convertir alturas a Y real en el extractor 1 × 1, con mínimo de dimensión explícito y máscara independiente para columnas ausentes. El contrato y la caché web 4 × 4 se conservan.
@@ -73,6 +73,8 @@ El servidor sigue proporcionando la entrada mediante sus ticks. La latencia de r
 - [x] Guardar alturas, estados y máscara en arrays compactos con formato versionado, origen y resolución explícitos; generar una previsualización de materiales.
 - [x] Comparar representaciones 4 × 4 y 1 × 1 con el mismo encuadre, paleta de materiales y hillshading calculado con separación física en bloques.
 - [x] Integrar el recorte 1 × 1 sobre el mapa global, sin reducirlo ni alterar controles, límites o zoom.
+- [x] Generar y empaquetar el mundo completo a 1 × 1 en mosaicos, sin LOD, por petición del usuario.
+- [x] Verificar continuidad del sombreado entre mosaicos y limitar la selección a una lectura de terreno por píxel.
 - [x] Comprobar exportación, compilación gráfica y arranque del servidor con el pack instalado.
 - [x] Medir el tamaño de los packs generados.
 - [ ] Validar respuesta, legibilidad y transición al fondo global dentro del juego.
@@ -85,14 +87,16 @@ El servidor sigue proporcionando la entrada mediante sus ticks. La latencia de r
 
 La comparación real muestra caminos y construcciones más definidos a 1 × 1 y más ruido de altura de la vegetación. El usuario aceptó el resultado y pidió instalarlo. Los informes locales conservan métricas de solapamiento de caminos, tamaños de PNG y tiempos; no miden FPS ni RAM máxima. La validación inicial de la comparación cubrió 23 tests.
 
-`backend/export_posteffect_map.py --surface surface.zip` conserva el fondo global y añade una textura de detalle con un texel por bloque, materiales y hillshading a escala vertical 1, sin desenfoque. Fuera del recorte y en columnas ausentes o materiales sin color se mantiene el fondo. La prueba instalada en ct111 usa un recorte de 512 × 512; la conversión del mundo completo requiere mosaicos/LOD. Packs con el zoom adicional: datapack 6007 bytes y resource pack 1727121 bytes. Se actualiza `resource-pack-sha1`, conservando la URL del pack y los permisos.
+El modo anterior `--surface surface.zip` se conserva para comparar un recorte con el fondo global. La prueba completa usa `backend/render_world_map.py` y `backend/export_posteffect_map.py --world-tiles <directorio>`. Procesa una copia estable por ventanas, con un halo de altura de un bloque, y guarda mosaicos de hasta 4096 píxeles sin reducción ni LOD. El manifiesto completo registra hashes y dimensiones. Los bordes se recortan a su tamaño real; huecos y chunks incompletos son transparentes y los materiales sin color usan gris neutro. El shader selecciona un solo sampler mediante un árbol equilibrado, con un máximo de 15 mosaicos más el estado. Si se supera el presupuesto, la generación falla expresamente.
 
-Pasan 27 tests. El shader se compiló y enlazó con los includes oficiales de Minecraft 26.3 en OpenGL; se comprobaron bloques std140 y ocho píxeles de coordenadas, bordes y transparencia mediante render real. La prueba del servidor comprueba la invocación nueva y la descarga del pack; la validación visual del cliente está pendiente.
+Generación real en ct111: seis mosaicos, 229,9 segundos y unos 339 MiB de memoria máxima del renderizador. Imágenes PNG: 24833526 bytes; texturas RGBA: 223008768 bytes sin otros buffers del cliente. Packs completos: datapack 6013 bytes y resource pack 24421850 bytes. Se conserva el zoom 512/1024/2048/4096 y se actualiza `resource-pack-sha1`. Las regiones, coordenadas, imágenes y manifiestos del mundo permanecen privados fuera de Git. Los cambios posteriores del mundo requieren otra generación.
 
-El siguiente paso es validar en el cliente el detalle, el marcador, los bordes del recorte y el zoom. Después sigue planificada la isométrica fija del mismo recorte, tratando vegetación y copas; Diorama y BlueMap continúan como referencias. La interfaz web instalada conserva su backend anterior.
+Pasan 33 tests, incluidos continuidad entre mosaicos, bordes parciales, máscaras, corrupción, límites de samplers y las cuatro escalas. El shader compiló y enlazó con los includes oficiales 26.3 en OpenGL; se comprobaron bloques std140 y 256 píxeles renderizados para seis mosaicos y otros 256 para quince, visitando todos los samplers con coordenadas negativas, transparencia y bordes. Los valores int se contrastaron con el codec oficial. Esto no mide los FPS ni la memoria gráfica real del cliente. La invocación nueva del servidor y la descarga del pack se verifican por separado.
+
+El siguiente paso es validar en el cliente el mundo completo, el marcador, las uniones y los cuatro zooms. Después sigue planificada la isométrica fija, tratando vegetación y copas; Diorama y BlueMap continúan como referencias. El LOD se aplaza hasta que una medición lo justifique. La interfaz web instalada conserva su backend anterior.
 
 ## Próxima comprobación
 
-Reconectar para descargar el pack actualizado y validar el detalle 1 × 1 dentro del mapa global, junto con el rango 512/1024/2048/4096. La fase 2 ya está validada. La isométrica y el clic derecho para recentrar siguen pendientes.
+Reconectar para descargar el pack completo 1 × 1 y validar las uniones, el marcador y la respuesta en las cuatro escalas. La fase 2 ya está validada. La isométrica y el clic derecho para recentrar siguen pendientes.
 
 Mantener sincronizados este roadmap y el estado de validación de `AGENTS.md` cuando se implemente una función o el usuario confirme una prueba.

@@ -2,6 +2,7 @@
 
 import argparse
 import gzip
+import hashlib
 import json
 import math
 from io import BytesIO
@@ -102,32 +103,91 @@ def read_detail(path, origin, world_size):
     return texture, offset, (surface.size, surface.size)
 
 
-def build(render_dir, output, view_height, style="relief", surface_path=None):
-    texture, origin, world_size = read_render(render_dir, style)
-    detail, detail_offset, detail_size = read_detail(surface_path, origin, world_size)
+def read_world_tiles(directory):
+    path = directory / "world-map.json"
+    before = path.read_bytes()
+    world = json.loads(before)
+    if (world.get("format"), world.get("version"), world.get("blocks_per_pixel")) != (
+            "vanilla-map-world", 1, 1):
+        raise ValueError("Expected a version-one, one-block world map")
+    width, height = world["world_size"]
+    tile_size = world["tile_size"]
+    if not all(isinstance(v, int) and v > 0 for v in (width, height, tile_size)) or tile_size > 4096:
+        raise ValueError("Invalid world or tile dimensions")
+    grid = [math.ceil(width / tile_size), math.ceil(height / tile_size)]
+    count = grid[0] * grid[1]
+    if world["grid"] != grid or not 1 <= count <= 15 or len(world["tiles"]) != count:
+        raise ValueError("World map must contain a complete grid of at most 15 tiles")
+    for i, tile in enumerate(world["tiles"]):
+        tx, tz = i % grid[0], i // grid[0]
+        expected = [min(tile_size, width - tx * tile_size), min(tile_size, height - tz * tile_size)]
+        if (tile["cell"] != [tx, tz] or tile["size"] != expected
+                or tile["file"] != f"tile-{tx}-{tz}.png"):
+            raise ValueError("Tile coordinates, dimensions or filename do not match the grid")
+        payload = (directory / tile["file"]).read_bytes()
+        if hashlib.sha256(payload).hexdigest() != tile["sha256"]:
+            raise ValueError("World tile checksum does not match its completed generation")
+        with Image.open(BytesIO(payload)) as image:
+            if image.size != tuple(expected) or image.mode != "RGBA":
+                raise ValueError("World tile must preserve its one-block RGBA dimensions")
+    if path.read_bytes() != before:
+        raise ValueError("World manifest changed during export")
+    return world
+
+
+def world_shader(count):
+    """Choose one sampler through a balanced tree, avoiding a scan of all tiles."""
+    def dispatch(start, end, indent="    "):
+        if end - start == 1:
+            return indent + f"return texelFetch(Tile{start}Sampler, pixel, 0);"
+        middle = (start + end) // 2
+        return (indent + f"if (index < {middle}) {{\n" + dispatch(start, middle, indent + "    ")
+                + "\n" + indent + "} else {\n" + dispatch(middle, end, indent + "    ")
+                + "\n" + indent + "}")
+    if not 1 <= count <= 15:
+        raise ValueError("World shader supports one to fifteen tiles")
+    source = (PACK_ROOT / "world_map.fsh").read_text()
+    return (source.replace("// TILE_SAMPLERS", "\n".join(
+                f"uniform sampler2D Tile{i}Sampler;" for i in range(count)))
+            .replace("// TILE_SIZES", "\n    ".join(f"vec2 Tile{i}Size;" for i in range(count)))
+            .replace("// TILE_FETCH", dispatch(0, count).lstrip()))
+
+
+def build(render_dir, output, view_height, style="relief", surface_path=None, world_tiles=None):
+    if surface_path is not None and world_tiles is not None:
+        raise ValueError("Choose either a surface detail or a full world map")
+    world = read_world_tiles(world_tiles) if world_tiles is not None else None
+    if world is None:
+        texture, origin, world_size = read_render(render_dir, style)
+        detail, detail_offset, detail_size = read_detail(surface_path, origin, world_size)
+    else:
+        origin = (world["origin"][0], 0, world["origin"][1])
+        world_size = world["world_size"]
     pan_units = max(1, math.ceil(max(world_size) * 16 / PAN_CENTER))
     pan_step = pan_units / 16
     pan_sensitivity = max(1, min(32767, round(view_height / (128 * pan_step))))
     png = BytesIO()
-    texture.save(png, format="PNG", optimize=True)
     detail_png = BytesIO()
-    detail.save(detail_png, format="PNG", optimize=True)
+    if world is None:
+        texture.save(png, format="PNG", optimize=True)
+        detail.save(detail_png, format="PNG", optimize=True)
     map_pass = {
         "vertex_shader": "minecraft:core/screenquad",
-        "fragment_shader": f"{NAMESPACE}:post/map",
-        "inputs": [
-            {"sampler_name": "State", "target": "next_state"},
-            {
-                "sampler_name": "Map", "location": f"{NAMESPACE}:map",
-                "width": texture.width, "height": texture.height,
-            },
-            {
-                "sampler_name": "Detail", "location": f"{NAMESPACE}:detail",
-                "width": detail.width, "height": detail.height,
-            },
-        ],
+        "fragment_shader": f"{NAMESPACE}:post/" + ("world_map" if world is not None else "map"),
+        "inputs": [{"sampler_name": "State", "target": "next_state"}],
         "output": "swap",
     }
+    if world is None:
+        map_pass["inputs"].extend([
+            {"sampler_name": "Map", "location": f"{NAMESPACE}:map",
+             "width": texture.width, "height": texture.height},
+            {"sampler_name": "Detail", "location": f"{NAMESPACE}:detail",
+             "width": detail.width, "height": detail.height}])
+    else:
+        map_pass["inputs"].extend([
+            {"sampler_name": f"Tile{i}", "location": f"{NAMESPACE}:world/{i}",
+             "width": tile["size"][0], "height": tile["size"][1]}
+            for i, tile in enumerate(world["tiles"])])
     blit_pass = {
         "vertex_shader": "minecraft:core/screenquad",
         "fragment_shader": "minecraft:post/blit",
@@ -156,14 +216,21 @@ def build(render_dir, output, view_height, style="relief", surface_path=None):
             ("map_near", view_height),
             ("map_close", view_height / 2),
         ):
-            render = dict(map_pass, uniforms={"MapConfig": [
+            config = [
                 {"name": "MapOrigin", "type": "ivec3", "value": origin},
                 {"name": "ViewHeight", "type": "float", "value": span},
                 {"name": "MapWorldSize", "type": "vec2", "value": world_size},
                 {"name": "PanStep", "type": "float", "value": pan_step},
-                {"name": "DetailOffset", "type": "vec2", "value": detail_offset},
-                {"name": "DetailWorldSize", "type": "vec2", "value": detail_size},
-            ]})
+            ]
+            if world is None:
+                config.extend([
+                    {"name": "DetailOffset", "type": "vec2", "value": detail_offset},
+                    {"name": "DetailWorldSize", "type": "vec2", "value": detail_size}])
+            else:
+                config.extend([
+                    {"name": "TileSize", "type": "int", "value": world["tile_size"]},
+                    {"name": "TilesX", "type": "int", "value": world["grid"][0]}])
+            render = dict(map_pass, uniforms={"MapConfig": config})
             effect = {
                 "targets": {
                     "swap": {},
@@ -186,9 +253,18 @@ def build(render_dir, output, view_height, style="relief", surface_path=None):
                 }]}
                 pack.writestr(f"{assets}/post_effect/pan/{pixel}_{value}.json", json.dumps(signal))
 
-        pack.writestr(f"{assets}/textures/effect/map.png", png.getvalue())
-        pack.writestr(f"{assets}/textures/effect/detail.png", detail_png.getvalue())
-        for shader in ("map.fsh", "navigation.fsh", "pan_signal.vsh", "pan_signal.fsh"):
+        if world is None:
+            pack.writestr(f"{assets}/textures/effect/map.png", png.getvalue())
+            pack.writestr(f"{assets}/textures/effect/detail.png", detail_png.getvalue())
+            pack.write(PACK_ROOT / "map.fsh", f"{assets}/shaders/post/map.fsh")
+        else:
+            for i, tile in enumerate(world["tiles"]):
+                payload = (world_tiles / tile["file"]).read_bytes()
+                if hashlib.sha256(payload).hexdigest() != tile["sha256"]:
+                    raise ValueError("World tile changed during export")
+                pack.writestr(f"{assets}/textures/effect/world/{i}.png", payload)
+            pack.writestr(f"{assets}/shaders/post/world_map.fsh", world_shader(len(world["tiles"])))
+        for shader in ("navigation.fsh", "pan_signal.vsh", "pan_signal.fsh"):
             pack.write(PACK_ROOT / shader, f"{assets}/shaders/post/{shader}")
 
     datapack = PACK_ROOT / "datapack"
@@ -230,8 +306,11 @@ def main():
                         help="Initial vertical map span; closest level shows half this height")
     parser.add_argument("--style", choices=("relief", "biomes"), default="relief",
                         help="Terrain shading (default) or plain biome colors")
-    parser.add_argument("--surface", type=Path,
+    source = parser.add_mutually_exclusive_group()
+    source.add_argument("--surface", type=Path,
                         help="Optional surface.zip: one-block material/hillshade detail over the full map")
+    source.add_argument("--world-tiles", type=Path,
+                        help="Completed world-map.json directory: full one-block tiled map")
     args = parser.parse_args()
     if not 1 <= args.view_height <= 60_000_000:
         parser.error("--view-height must be between 1 and 60000000 blocks")
@@ -239,7 +318,7 @@ def main():
     args.output.mkdir(parents=True, exist_ok=True)
     with TemporaryDirectory(dir=args.output) as temporary:
         staging = Path(temporary)
-        build(args.render_dir, staging, args.view_height, args.style, args.surface)
+        build(args.render_dir, staging, args.view_height, args.style, args.surface, args.world_tiles)
         for pack in sorted(staging.glob("*.zip")):
             destination = args.output / pack.name
             pack.replace(destination)

@@ -104,21 +104,22 @@ def hillshade(raster: Raster, x: int, z: int, vertical_scale=1.0) -> float:
     return max(0.3, min(1.0, light))
 
 
-def render(raster: Raster, vertical_scale=1.0):
+def render(raster: Raster, vertical_scale=1.0, unknown_color="#ff00ff", include_base=True):
     if not math.isfinite(vertical_scale) or vertical_scale <= 0:
         raise ValueError("Vertical scale must be a positive finite number")
-    colors = [bytes.fromhex((material_color(name) or "#ff00ff")[1:])
+    colors = [bytes.fromhex((material_color(name) or unknown_color)[1:])
               for name, _ in raster.palette]
-    base = bytearray(raster.size * raster.size * 4)
-    shaded = bytearray(len(base))
+    base = bytearray(raster.size * raster.size * 4) if include_base else None
+    shaded = bytearray(raster.size * raster.size * 4)
     for i, valid in enumerate(raster.valid):
         if valid:
             color = colors[raster.states[i]]
             light = hillshade(raster, i % raster.size, i // raster.size, vertical_scale)
-            base[i*4:i*4+4] = color + b"\xff"
+            if base is not None:
+                base[i*4:i*4+4] = color + b"\xff"
             shaded[i*4:i*4+4] = bytes(int(channel * light) for channel in color) + b"\xff"
     dimensions = (raster.size, raster.size)
-    return (Image.frombytes("RGBA", dimensions, bytes(base)),
+    return (Image.frombytes("RGBA", dimensions, bytes(base)) if base is not None else None,
             Image.frombytes("RGBA", dimensions, bytes(shaded)))
 
 

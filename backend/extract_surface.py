@@ -239,6 +239,14 @@ class Surface:
 def extract_surface(world: Path, origin_x: int, origin_z: int, size=512, min_y=-64):
     if not 1 <= size <= 2048:
         raise ValueError("Crop size must be between 1 and 2048 blocks")
+    return extract_window(world, origin_x, origin_z, size, min_y)
+
+
+def extract_window(world: Path, origin_x: int, origin_z: int, size: int, min_y=-64,
+                   allow_empty=False):
+    """Read a bounded working window, including a one-block tile lighting halo."""
+    if not 1 <= size <= 4098:
+        raise ValueError("Working window must be between 1 and 4098 blocks")
     if not -32768 <= min_y <= 32767 - 511:
         raise ValueError("min_y is outside the signed int16 height range")
     surface = Surface(origin_x, origin_z, size, min_y)
@@ -248,12 +256,12 @@ def extract_surface(world: Path, origin_x: int, origin_z: int, size=512, min_y=-
             regions.setdefault((cx // 32, cz // 32), []).append((cx, cz))
     for (rx, rz), coordinates in sorted(regions.items()):
         path = world / "region" / f"r.{rx}.{rz}.mca"
-        if not path.exists():
+        if not path.exists() or path.stat().st_size == 0:
             continue
         for root, source in region_chunks(path, coordinates):
             surface.add_chunk(root)
             surface.sources.append(source)
-    if not any(surface.valid):
+    if not allow_empty and not any(surface.valid):
         raise ValueError("No populated surface columns in the requested crop")
     return surface
 
