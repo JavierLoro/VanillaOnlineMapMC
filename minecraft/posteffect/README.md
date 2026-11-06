@@ -14,7 +14,7 @@ python backend/export_posteffect_map.py --render-dir backend/map_images --output
 
 La carpeta de render debe contener `map_base.png`, `map_hillshade.png` y `tile_index.json.gz` de la misma generación terminada. El relieve se compone al exportar en una sola textura mediante multiplicación, conservando su transparencia y coordenadas. No utiliza `map_shade.png` ni añade pases o cálculos por fotograma al shader. Si falta la capa, el exportador lo indica; `--style biomes` permite generar la vista plana anterior usando solo la imagen base y el índice.
 
-El encuadre inicial cubre 1024 bloques de alto por defecto y es el máximo acercamiento. `--view-height` fija ese encuadre mínimo; los otros niveles muestran el doble y el cuádruple de terreno. Al cambiar las escalas o actualizar el terreno, regenera e instala ambos packs.
+El encuadre inicial cubre 1024 bloques de alto por defecto. Un nivel adicional permite acercarse a 512 bloques; los otros niveles muestran 2048 y 4096. `--view-height` fija el encuadre inicial; las cuatro escalas muestran la mitad, el mismo, el doble y el cuádruple de terreno. Al cambiar las escalas o actualizar el terreno, regenera e instala ambos packs.
 
 Para comparar las dos vistas con el mismo render:
 
@@ -35,7 +35,7 @@ python backend/export_posteffect_map.py --render-dir backend/map_images --surfac
 
 El recorte debe estar dentro de los límites del render global y medir como máximo 2048 bloques de lado. Se conserva un texel por bloque, con el mismo hillshading y paleta aproximada de materiales de la comparación 1 × 1, escala vertical 1 y sin desenfoque. El exportador nunca reduce esta textura; las columnas transparentes y los materiales sin color mantienen visible el fondo, sin el magenta del diagnóstico local. `--style` controla el fondo global; el detalle siempre usa materiales y hillshading.
 
-El resource pack contiene dos texturas: el fondo global y el detalle. El shader consulta el detalle únicamente dentro de sus límites y toma el texel del bloque correspondiente, sin filtrado entre bloques. Conserva la proyección, los límites globales, el marcador, los controles y las escalas 1024/2048/4096. Añade una consulta de textura por píxel dentro del recorte; los FPS y la legibilidad en el cliente siguen pendientes de validación. El borde entre colores de bioma y materiales puede ser visible, y la vegetación conserva el ruido de altura observado en la comparación.
+El resource pack contiene dos texturas: el fondo global y el detalle. El shader consulta el detalle únicamente dentro de sus límites y toma el texel del bloque correspondiente, sin filtrado entre bloques. Conserva la proyección, los límites globales, el marcador y los controles. Las escalas son 512/1024/2048/4096, con apertura en 1024. Añade una consulta de textura por píxel dentro del recorte; los FPS y la legibilidad en el cliente siguen pendientes de validación. El borde entre colores de bioma y materiales puede ser visible, y la vegetación conserva el ruido de altura observado en la comparación.
 
 Regenera e instala ambos packs de la misma revisión al incorporar este sampler y sus uniformes. El servidor debe distribuir el ZIP nuevo y actualizar su `resource-pack-sha1`; reconecta el cliente para descargarlo. La ampliación 1 × 1 al mundo completo requiere mosaicos/LOD y sigue pendiente.
 
@@ -45,8 +45,8 @@ Regenera e instala ambos packs de la misma revisión al incorporar este sampler 
 2. Activa `vanilla-map-post-resources.zip` en el cliente o distribúyelo desde el servidor. Si usas `resource-pack-sha1`, actualízalo con el hash del ZIP.
 3. En primera persona y en el Overworld, ejecuta **`/trigger vmp_map`** para abrir el mapa. Ciérralo con **Mayús** (la tecla que tengas asignada a agacharte) o repite el comando.
 4. Sin caminar, mueve el ratón en horizontal y vertical. Comprueba que aparece el punto azul y que la vista vuelve a centrarse en tu posición al cerrar y abrir el mapa.
-5. El mapa abre en el máximo acercamiento, con 1024 bloques de alto. Gira la rueda hacia abajo para ver 2048 y 4096 bloques, y hacia arriba para regresar hasta 1024. No permite acercarse más que la vista inicial. El zoom mantiene el centro de la vista y al reabrir el mapa vuelve a 1024.
-6. Comprueba que las laderas y montañas se distinguen con el sombreado, que los biomas siguen siendo legibles y que el marcador permanece alineado en las tres escalas.
+5. El mapa abre con 1024 bloques de alto. Gira la rueda hacia arriba para acercarte a 512 y hacia abajo para volver a 1024, 2048 y 4096. El zoom mantiene el centro de la vista y al reabrir el mapa vuelve a 1024. Comprueba que se detiene en 512 y 4096 y que el nivel nuevo desaparece al cerrar con Mayús.
+6. Comprueba que las laderas y montañas se distinguen con el sombreado, que los biomas siguen siendo legibles y que el marcador permanece alineado en las cuatro escalas.
 
 Un operador también puede probar la vista inicial del resource pack directamente con `/posteffect add @s vanilla_map_post:map_near` y quitarla con `/posteffect remove @s vanilla_map_post:map_near`.
 

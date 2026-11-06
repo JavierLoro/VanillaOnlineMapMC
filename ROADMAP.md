@@ -34,7 +34,7 @@ El servidor sigue proporcionando la entrada mediante sus ticks. La latencia de r
 
 **Estado: ajuste del rango de zoom implementado; pendiente de validación visual. Después, clic derecho para recentrar.**
 
-- [x] Conservar la vista inicial de 1024 bloques como máximo acercamiento y ofrecer 2048 y 4096 para alejarse.
+- [x] Conservar la apertura en 1024 y las escalas 2048/4096; añadir un cuarto nivel de 512 para acercarse, por petición posterior del usuario.
 - [ ] Validar el rango nuevo, el centro al cambiar de escala y el regreso a 1024 al reabrir.
 - [ ] Clic derecho para volver a centrar el mapa en el jugador conservando el zoom.
 - [ ] Clic izquierdo para seleccionar un punto o chunk y consultar sus coordenadas.
@@ -61,7 +61,7 @@ El servidor sigue proporcionando la entrada mediante sus ticks. La latencia de r
 - [x] Generar una sola textura sin añadir trabajo por fotograma ni cambiar zoom o controles.
 - [x] Mantener `--style biomes` para comparar con la vista plana.
 - [x] Comprobar capas incoherentes y verificar que solo cambia la textura de los packs.
-- [ ] Validar dentro del juego legibilidad, sensación de relieve y alineación del marcador en las tres escalas.
+- [ ] Validar dentro del juego legibilidad, sensación de relieve y alineación del marcador en las cuatro escalas.
 
 ## 6. Detalle por bloque y vista inclinada
 
@@ -85,14 +85,14 @@ El servidor sigue proporcionando la entrada mediante sus ticks. La latencia de r
 
 La comparación real muestra caminos y construcciones más definidos a 1 × 1 y más ruido de altura de la vegetación. El usuario aceptó el resultado y pidió instalarlo. Los informes locales conservan métricas de solapamiento de caminos, tamaños de PNG y tiempos; no miden FPS ni RAM máxima. La validación inicial de la comparación cubrió 23 tests.
 
-`backend/export_posteffect_map.py --surface surface.zip` conserva el fondo global y añade una textura de detalle con un texel por bloque, materiales y hillshading a escala vertical 1, sin desenfoque. Fuera del recorte y en columnas ausentes o materiales sin color se mantiene el fondo. La prueba instalada en ct111 usa un recorte de 512 × 512; la conversión del mundo completo requiere mosaicos/LOD. Packs finales: datapack 5991 bytes y resource pack 1726440 bytes. Se actualiza `resource-pack-sha1`, conservando la URL del pack y los permisos.
+`backend/export_posteffect_map.py --surface surface.zip` conserva el fondo global y añade una textura de detalle con un texel por bloque, materiales y hillshading a escala vertical 1, sin desenfoque. Fuera del recorte y en columnas ausentes o materiales sin color se mantiene el fondo. La prueba instalada en ct111 usa un recorte de 512 × 512; la conversión del mundo completo requiere mosaicos/LOD. Packs con el zoom adicional: datapack 6007 bytes y resource pack 1727121 bytes. Se actualiza `resource-pack-sha1`, conservando la URL del pack y los permisos.
 
-Pasan 26 tests. El shader se compiló y enlazó con los includes oficiales de Minecraft 26.3 en OpenGL; se comprobaron bloques std140 y ocho píxeles de coordenadas, bordes y transparencia mediante render real. La prueba del servidor comprueba la invocación nueva y la descarga del pack; la validación visual del cliente está pendiente.
+Pasan 27 tests. El shader se compiló y enlazó con los includes oficiales de Minecraft 26.3 en OpenGL; se comprobaron bloques std140 y ocho píxeles de coordenadas, bordes y transparencia mediante render real. La prueba del servidor comprueba la invocación nueva y la descarga del pack; la validación visual del cliente está pendiente.
 
 El siguiente paso es validar en el cliente el detalle, el marcador, los bordes del recorte y el zoom. Después sigue planificada la isométrica fija del mismo recorte, tratando vegetación y copas; Diorama y BlueMap continúan como referencias. La interfaz web instalada conserva su backend anterior.
 
 ## Próxima comprobación
 
-Reconectar para descargar el pack actualizado y validar el detalle 1 × 1 dentro del mapa global, junto con el rango 1024/2048/4096. La fase 2 ya está validada. La isométrica y el clic derecho para recentrar siguen pendientes.
+Reconectar para descargar el pack actualizado y validar el detalle 1 × 1 dentro del mapa global, junto con el rango 512/1024/2048/4096. La fase 2 ya está validada. La isométrica y el clic derecho para recentrar siguen pendientes.
 
 Mantener sincronizados este roadmap y el estado de validación de `AGENTS.md` cuando se implemente una función o el usuario confirme una prueba.

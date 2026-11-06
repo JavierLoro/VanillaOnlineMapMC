@@ -1,6 +1,7 @@
 import gzip
 import json
 import os
+import re
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
@@ -91,13 +92,13 @@ class ExportReliefTests(unittest.TestCase):
                                  if "resources" in name else [])
                 if "resources" in name:
                     spans = []
-                    for effect in ("map_near", "map", "map_far"):
+                    for effect in ("map_close", "map_near", "map", "map_far"):
                         payload = json.loads(relief.read(
                             f"assets/vanilla_map_post/post_effect/{effect}.json"))
                         config = next(p["uniforms"]["MapConfig"] for p in payload["passes"]
                                       if "MapConfig" in p.get("uniforms", {}))
                         spans.append(next(v["value"] for v in config if v["name"] == "ViewHeight"))
-                    self.assertEqual(spans, [1024, 2048, 4096])
+                    self.assertEqual(spans, [512, 1024, 2048, 4096])
 
     def test_detail_preserves_one_block_pixels_world_alignment_and_controls(self):
         surface = Surface(-4, 12, 4, -64)
@@ -124,7 +125,7 @@ class ExportReliefTests(unittest.TestCase):
                 self.assertEqual(image.size, (4, 4))
                 self.assertEqual(image.tobytes(), expected.tobytes())
                 self.assertEqual(image.getpixel((1, 1))[3], 0)
-            for effect, span in (("map_near", 1024), ("map", 2048), ("map_far", 4096)):
+            for effect, span in (("map_close", 512), ("map_near", 1024), ("map", 2048), ("map_far", 4096)):
                 effect = json.loads(pack.read(f"assets/vanilla_map_post/post_effect/{effect}.json"))
                 map_pass = next(p for p in effect["passes"] if "MapConfig" in p.get("uniforms", {}))
                 config = {v["name"]: v["value"] for v in map_pass["uniforms"]["MapConfig"]}
@@ -160,6 +161,33 @@ class ExportReliefTests(unittest.TestCase):
         surface.save(source)
         texture, _, _ = EXPORT.read_detail(source / "surface.zip", (-8, 0, 12), (12, 4))
         self.assertEqual(texture.getpixel((0, 0)), (0, 0, 0, 0))
+
+    def test_all_zoom_states_have_effects_and_cleanup_with_configurable_initial_span(self):
+        output = self.render / "zoom"
+        output.mkdir()
+        EXPORT.build(self.render, output, 2048)
+        prefix = "data/vanilla_map_post/function/"
+        with ZipFile(output / "vanilla-map-post-datapack.zip") as datapack, ZipFile(
+                output / "vanilla-map-post-resources.zip") as resources:
+            update = datapack.read(prefix + "update_view.mcfunction").decode()
+            effects = {int(state): name for state, name in re.findall(
+                r"vmp_zoom matches (\d+) run posteffect add @s vanilla_map_post:(\w+)", update)}
+            self.assertEqual(set(effects), {0, 1, 2, 3})
+            clear = datapack.read(prefix + "clear_view.mcfunction").decode()
+            removed = set(re.findall(r"posteffect remove @s vanilla_map_post:(\w+)", clear))
+            self.assertEqual(removed, set(effects.values()))
+            zoom = datapack.read(prefix + "update_zoom.mcfunction").decode()
+            limits = {int(value) for value in re.findall(r"vmp_zoom matches (\d+) run return 0", zoom)}
+            self.assertEqual(limits, {min(effects), max(effects)})
+            toggle = datapack.read(prefix + "toggle.mcfunction").decode()
+            initial = int(re.search(r"players set @s vmp_zoom (\d+)", toggle)[1])
+            self.assertIn("posteffect add @s vanilla_map_post:" + effects[initial], toggle)
+            for state, name in effects.items():
+                effect = json.loads(resources.read(f"assets/vanilla_map_post/post_effect/{name}.json"))
+                config = next(p["uniforms"]["MapConfig"] for p in effect["passes"]
+                              if "MapConfig" in p.get("uniforms", {}))
+                values = {v["name"]: v["value"] for v in config}
+                self.assertEqual(values["ViewHeight"], 2048 * 2 ** (initial - state))
 
 
 if __name__ == "__main__":

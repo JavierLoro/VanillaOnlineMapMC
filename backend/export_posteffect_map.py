@@ -154,6 +154,7 @@ def build(render_dir, output, view_height, style="relief", surface_path=None):
             ("map_far", view_height * 4),
             ("map", view_height * 2),
             ("map_near", view_height),
+            ("map_close", view_height / 2),
         ):
             render = dict(map_pass, uniforms={"MapConfig": [
                 {"name": "MapOrigin", "type": "ivec3", "value": origin},
@@ -225,7 +226,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--render-dir", type=Path, default=ROOT / "backend" / "map_images")
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--view-height", type=int, default=1024, help="Initial and minimum vertical map span in blocks")
+    parser.add_argument("--view-height", type=int, default=1024,
+                        help="Initial vertical map span; closest level shows half this height")
     parser.add_argument("--style", choices=("relief", "biomes"), default="relief",
                         help="Terrain shading (default) or plain biome colors")
     parser.add_argument("--surface", type=Path,

@@ -7,3 +7,4 @@ function vanilla_map_post:clear_view
 execute if score @s vmp_zoom matches 0 run posteffect add @s vanilla_map_post:map_far
 execute if score @s vmp_zoom matches 1 run posteffect add @s vanilla_map_post:map
 execute if score @s vmp_zoom matches 2 run posteffect add @s vanilla_map_post:map_near
+execute if score @s vmp_zoom matches 3 run posteffect add @s vanilla_map_post:map_close
