@@ -1,6 +1,6 @@
 # Prueba del mapa a pantalla completa en Minecraft Java 26.3
 
-El efecto toma el mapa del visor web y lo centra inicialmente en la cámara. La vista cenital combina colores de bioma con sombreado suave de altura y pendientes para mostrar el relieve. Puedes desplazarte por el mapa con el ratón sin caminar. Un punto azul indica tu posición al apartar el mapa de la cruceta. Minecraft dibuja la cruceta y el resto del HUD encima.
+El efecto toma el mapa del visor web y lo centra inicialmente en la cámara. La vista cenital combina colores de bioma con hillshading al 100 %, como la capa del visor web, sin topografía adicional ni desenfoque. Puedes desplazarte por el mapa con el ratón sin caminar. Un punto azul indica tu posición al apartar el mapa de la cruceta. Minecraft dibuja la cruceta y el resto del HUD encima.
 
 ## Generar los packs
 
@@ -10,7 +10,7 @@ Con Python 3.11+ y Pillow instalados, ejecuta desde la raíz del repositorio cua
 python backend/export_posteffect_map.py --render-dir backend/map_images --output post-packs
 ```
 
-La carpeta de render debe contener `map_base.png`, `map_shade.png`, `map_hillshade.png` y `tile_index.json.gz` de la misma generación terminada. El relieve se compone al exportar en una sola textura, conservando su transparencia y coordenadas. No añade pases ni cálculos por fotograma al shader. Si faltan las capas, el exportador lo indica; `--style biomes` permite generar la vista plana anterior usando solo la imagen base y el índice.
+La carpeta de render debe contener `map_base.png`, `map_hillshade.png` y `tile_index.json.gz` de la misma generación terminada. El relieve se compone al exportar en una sola textura mediante multiplicación, conservando su transparencia y coordenadas. No utiliza `map_shade.png` ni añade pases o cálculos por fotograma al shader. Si falta la capa, el exportador lo indica; `--style biomes` permite generar la vista plana anterior usando solo la imagen base y el índice.
 
 El encuadre inicial cubre 1024 bloques de alto por defecto y es el máximo acercamiento. `--view-height` fija ese encuadre mínimo; los otros niveles muestran el doble y el cuádruple de terreno. Al cambiar las escalas o actualizar el terreno, regenera e instala ambos packs.
 

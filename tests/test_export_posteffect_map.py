@@ -50,14 +50,14 @@ class ExportReliefTests(unittest.TestCase):
         self.assertEqual(relief.getpixel((1, 0)), plain.getpixel((1, 0)))
 
     def test_missing_relief_can_be_exported_explicitly_as_biomes(self):
-        (self.render / "map_shade.png").unlink()
+        (self.render / "map_hillshade.png").unlink()
         with self.assertRaisesRegex(ValueError, "--style biomes"):
             EXPORT.read_render(self.render)
         plain, _, _ = EXPORT.read_render(self.render, "biomes")
         self.assertEqual(plain.getpixel((0, 0)), (120, 180, 90, 255))
 
     def test_rejects_misaligned_or_stale_layers(self):
-        path = self.render / "map_shade.png"
+        path = self.render / "map_hillshade.png"
         Image.new("RGBA", (1, 1), "white").save(path)
         os.utime(path, (1_700_000_001,) * 2)
         with self.assertRaisesRegex(ValueError, "dimensions"):
@@ -69,6 +69,12 @@ class ExportReliefTests(unittest.TestCase):
         os.utime(path, (1_700_000_004,) * 2)
         with self.assertRaisesRegex(ValueError, "same completed render"):
             EXPORT.read_render(self.render)
+
+    def test_full_hillshade_uses_unblurred_pixels_without_topography(self):
+        (self.render / "map_shade.png").unlink()
+        texture, _, _ = EXPORT.read_render(self.render)
+        self.assertEqual(texture.getpixel((0, 0)), (37, 56, 28, 255))
+        self.assertEqual(texture.getpixel((1, 0)), (120, 180, 90, 255))
 
     def test_style_changes_only_the_texture_and_keeps_zoom_and_controls(self):
         plain_dir, relief_dir = self.render / "plain", self.render / "relief"

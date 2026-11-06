@@ -56,8 +56,8 @@ El servidor sigue proporcionando la entrada mediante sus ticks. La latencia de r
 
 **Estado: implementado; pendiente de validación visual en el cliente del usuario.**
 
-- [x] Combinar colores de bioma con sombreado suave de altura y pendientes del visor web.
-- [x] Suavizar el sombreado fino de las copas y conservar las coordenadas y la transparencia.
+- [x] Combinar colores de bioma con hillshading al 100 %, como en el visor web, sin topografía adicional ni desenfoque.
+- [x] Conservar las coordenadas y la transparencia del terreno.
 - [x] Generar una sola textura sin añadir trabajo por fotograma ni cambiar zoom o controles.
 - [x] Mantener `--style biomes` para comparar con la vista plana.
 - [x] Comprobar capas incoherentes y verificar que solo cambia la textura de los packs.

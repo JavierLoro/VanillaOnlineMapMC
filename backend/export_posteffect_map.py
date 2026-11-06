@@ -9,7 +9,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from zipfile import ZIP_DEFLATED, ZipFile
 
-from PIL import Image, ImageChops, ImageFilter
+from PIL import Image, ImageChops
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -17,7 +17,7 @@ PACK_ROOT = ROOT / "minecraft" / "posteffect"
 NAMESPACE = "vanilla_map_post"
 TEXTURE_LIMIT = 2048
 PAN_CENTER = 32767
-RELIEF_LAYERS = (("shade", 0.25), ("hillshade", 0.45))
+RELIEF_LAYERS = (("hillshade", 1.0),)
 
 
 def read_render(render_dir, style="relief"):
@@ -53,11 +53,6 @@ def read_render(render_dir, style="relief"):
                 if layer.size != texture.size:
                     raise ValueError(f"{path.name} dimensions do not match the map image.")
                 overlay = layer.convert("RGBA")
-                if path.name == "map_hillshade.png":
-                    # Reduce canopy noise without shifting the terrain or its mask.
-                    softened = overlay.convert("RGB").filter(ImageFilter.GaussianBlur(1))
-                    softened.putalpha(overlay.getchannel("A"))
-                    overlay = softened
                 # Transparent overlay pixels must leave the biome color unchanged.
                 lighting = Image.new("RGBA", texture.size, "white")
                 lighting.alpha_composite(overlay)

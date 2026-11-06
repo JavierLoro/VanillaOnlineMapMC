@@ -24,7 +24,7 @@ La rama activa para esta prueba es `feature/posteffect-world-map`. La integraci�
 
 - La plataforma de la prueba es Minecraft Java 26.3, con datapack y resource pack.
 - La vista ocupa la pantalla, mantiene la cruceta y conserva visible la interfaz habitual, incluida la barra rápida.
-- El exportador usa relieve cenital por defecto: combina la base de biomas con `map_shade.png` y `map_hillshade.png` del mismo render. El sombreado de pendientes se suaviza para reducir ruido de las copas. La composición se guarda en una sola textura; no modifica coordenadas, shader ni controles. `--style biomes` conserva la exportación plana anterior.
+- El exportador usa relieve cenital por defecto: multiplica la base de biomas por `map_hillshade.png` al 100 %, como la capa de hillshading del visor web. No añade topografía ni desenfoque. La composición se guarda en una sola textura; no modifica coordenadas, shader ni controles. `--style biomes` conserva la exportación plana anterior.
 - `/trigger vmp_map` abre o cierra el mapa. La acción de agacharse, Mayús por defecto, también lo cierra. Si se abre con esa acción ya pulsada, el atajo se activa después de soltarla.
 - El ratón desplaza el mapa. La rueda cambia entre tres escalas: 1024, 2048 y 4096 bloques de alto por defecto. El mapa abre en 1024, su máximo acercamiento; solo permite alejarse desde esa vista. `--view-height` configura ese encuadre mínimo. El cambio de ranura de la barra rápida sigue ocurriendo y las teclas numéricas pueden cambiar el zoom.
 - El punto azul muestra la posición del jugador al desplazar la vista. Girar el ratón también gira al personaje y las teclas de movimiento siguen disponibles.
@@ -50,7 +50,7 @@ python backend/export_posteffect_map.py --render-dir backend/map_images --output
 ```
 
 - El render de entrada debe estar terminado. `map_base.png` y `tile_index.json.gz` deben corresponder a la misma generación.
-- El estilo `relief` también requiere `map_shade.png` y `map_hillshade.png` de esa generación. Se verifican dimensiones y fechas antes y después de exportar. El estilo `biomes` solo requiere la base y el índice.
+- El estilo `relief` también requiere `map_hillshade.png` de esa generación. Se verifican dimensiones y fechas antes y después de exportar. `map_shade.png` no se utiliza. El estilo `biomes` solo requiere la base y el índice.
 - El exportador incorpora al datapack las funciones `pan_config.mcfunction` y `limit_pan.mcfunction`, calculadas a partir de los límites del render.
 - Cuando cambien el protocolo de píxeles, los shaders o los límites generados, regenera e instala ambos packs de la misma revisión.
 - Comprueba que el zoom conserva el centro, que los bordes responden al invertir el ratón y que el marcador sigue alineado.
